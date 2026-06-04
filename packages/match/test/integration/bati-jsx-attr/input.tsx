@@ -1,6 +1,6 @@
 const el = (
   <Button
-    // @bati auth
+    // $$.BATI.has("auth")
     onLogout={logout}
     label="Go"
   />

@@ -4,7 +4,7 @@
 
 <script setup lang="ts">
 const title = "App"
-if (BATI.has("auth")) {
+if ($$.BATI.has("auth")) {
   useAuth()
 } else {
   useGuest()

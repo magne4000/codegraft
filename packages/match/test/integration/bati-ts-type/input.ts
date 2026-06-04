@@ -1,4 +1,4 @@
-type Config = BATI.If<{
+type Config = $$.If<{
   auth: { user: User }
   default: {}
 }>

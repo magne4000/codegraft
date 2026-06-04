@@ -48,7 +48,7 @@ export async function buildRules(
   const stems: string[] = []
   for (const target of targets) {
     const stem = typeof target === 'string' ? target : target.id
-    const source = serialiseRules(target, await ruleSet.compiledRulesFor(target))
+    const source = serialiseRules(target, await ruleSet.compiledRulesFor(target), ruleSet.namespace)
     await writeFile(join(outputDir, `${stem}.js`), source)
     stems.push(stem)
   }

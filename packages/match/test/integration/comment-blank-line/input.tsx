@@ -1,3 +1,3 @@
-// @bati auth
+// $$.BATI.has("auth")
 
 const session = createSession()

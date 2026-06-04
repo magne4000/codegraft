@@ -12,6 +12,11 @@ const root = fileURLToPath(new URL('./integration', import.meta.url))
 // Regenerate the expected fixtures: UPDATE_FIXTURES=1 pnpm test
 const UPDATE = process.env.UPDATE_FIXTURES === '1'
 
+// The `$$` value the rules evaluate against: $$.BATI.has(f) ⇔ f is an enabled feature.
+const bati = (...features: string[]): Record<string, unknown> => ({
+  BATI: { has: (f: string) => features.includes(f) },
+})
+
 interface IntegrationCase {
   dir: string
   target: GrammarId | ZoneSplitter
@@ -27,8 +32,8 @@ const CASES: IntegrationCase[] = [
     input: 'input.tsx',
     rules: batiRules,
     variants: [
-      { name: 'feature on → keep then-branch', context: { features: ['auth'] }, expected: 'with.tsx' },
-      { name: 'feature off → keep else-branch', context: { features: [] }, expected: 'without.tsx' },
+      { name: 'feature on → keep then-branch', context: bati('auth'), expected: 'with.tsx' },
+      { name: 'feature off → keep else-branch', context: bati(), expected: 'without.tsx' },
     ],
   },
   {
@@ -37,8 +42,8 @@ const CASES: IntegrationCase[] = [
     input: 'input.tsx',
     rules: batiRules,
     variants: [
-      { name: 'feature on → consequent', context: { features: ['auth'] }, expected: 'with.tsx' },
-      { name: 'feature off → alternate', context: { features: [] }, expected: 'without.tsx' },
+      { name: 'feature on → consequent', context: bati('auth'), expected: 'with.tsx' },
+      { name: 'feature off → alternate', context: bati(), expected: 'without.tsx' },
     ],
   },
   {
@@ -47,8 +52,8 @@ const CASES: IntegrationCase[] = [
     input: 'input.tsx',
     rules: batiRules,
     variants: [
-      { name: 'feature on → keep, strip directive', context: { features: ['auth'] }, expected: 'with.tsx' },
-      { name: 'feature off → remove decl + directive', context: { features: [] }, expected: 'without.tsx' },
+      { name: 'feature on → keep, strip directive', context: bati('auth'), expected: 'with.tsx' },
+      { name: 'feature off → remove decl + directive', context: bati(), expected: 'without.tsx' },
     ],
   },
   {
@@ -57,8 +62,8 @@ const CASES: IntegrationCase[] = [
     input: 'input.tsx',
     rules: batiRules,
     variants: [
-      { name: 'feature on → keep attribute', context: { features: ['auth'] }, expected: 'with.tsx' },
-      { name: 'feature off → remove attribute', context: { features: [] }, expected: 'without.tsx' },
+      { name: 'feature on → keep attribute', context: bati('auth'), expected: 'with.tsx' },
+      { name: 'feature off → remove attribute', context: bati(), expected: 'without.tsx' },
     ],
   },
   {
@@ -67,8 +72,8 @@ const CASES: IntegrationCase[] = [
     input: 'input.html',
     rules: batiRules,
     variants: [
-      { name: 'feature on → keep element', context: { features: ['auth'] }, expected: 'with.html' },
-      { name: 'feature off → remove element', context: { features: [] }, expected: 'without.html' },
+      { name: 'feature on → keep element', context: bati('auth'), expected: 'with.html' },
+      { name: 'feature off → remove element', context: bati(), expected: 'without.html' },
     ],
   },
   {
@@ -77,9 +82,9 @@ const CASES: IntegrationCase[] = [
     input: 'input.tsx',
     rules: batiRules,
     variants: [
-      { name: 'both on → inner then', context: { features: ['auth', 'admin'] }, expected: 'both.tsx' },
-      { name: 'outer on, inner off → inner else', context: { features: ['auth'] }, expected: 'auth.tsx' },
-      { name: 'outer off → outer else', context: { features: [] }, expected: 'none.tsx' },
+      { name: 'both on → inner then', context: bati('auth', 'admin'), expected: 'both.tsx' },
+      { name: 'outer on, inner off → inner else', context: bati('auth'), expected: 'auth.tsx' },
+      { name: 'outer off → outer else', context: bati(), expected: 'none.tsx' },
     ],
   },
   {
@@ -95,7 +100,7 @@ const CASES: IntegrationCase[] = [
     input: 'input.tsx',
     rules: batiRules,
     variants: [
-      { name: 'blank-separated directive does not gate', context: { features: [] }, expected: 'out.tsx' },
+      { name: 'blank-separated directive does not gate', context: bati(), expected: 'out.tsx' },
     ],
   },
   {
@@ -104,7 +109,7 @@ const CASES: IntegrationCase[] = [
     input: 'input.tsx',
     rules: batiRules,
     variants: [
-      { name: 'comment after last attr is inner, not a gate', context: { features: [] }, expected: 'out.tsx' },
+      { name: 'comment after last attr is inner, not a gate', context: bati(), expected: 'out.tsx' },
     ],
   },
   {
@@ -113,8 +118,8 @@ const CASES: IntegrationCase[] = [
     input: 'input.ts',
     rules: batiRules,
     variants: [
-      { name: 'feature on → its branch type', context: { features: ['auth'] }, expected: 'with.ts' },
-      { name: 'feature off → default branch type', context: { features: [] }, expected: 'without.ts' },
+      { name: 'feature on → its branch type', context: bati('auth'), expected: 'with.ts' },
+      { name: 'feature off → default branch type', context: bati(), expected: 'without.ts' },
     ],
   },
   {
@@ -123,8 +128,8 @@ const CASES: IntegrationCase[] = [
     input: 'input.vue',
     rules: batiRules,
     variants: [
-      { name: 'transforms the <script> zone, feature on', context: { features: ['auth'] }, expected: 'with.vue' },
-      { name: 'transforms the <script> zone, feature off', context: { features: [] }, expected: 'without.vue' },
+      { name: 'transforms the <script> zone, feature on', context: bati('auth'), expected: 'with.vue' },
+      { name: 'transforms the <script> zone, feature off', context: bati(), expected: 'without.vue' },
     ],
   },
 ]

@@ -1,18 +1,18 @@
 # Trast
 
-Structural, build-time code transformation built on [tree-sitter](https://tree-sitter.github.io/) (via `web-tree-sitter`/WASM). You author rules as **structural patterns + rewrite functions**; Trast matches them against the syntax tree and applies the rewrites as precise text edits (with source maps). The motivating use case is collapsing scaffolding conditionals — e.g. [Bati](https://batijs.dev/)'s `BATI.has("feature")` — but the engine is general.
+Structural, build-time code transformation built on [tree-sitter](https://tree-sitter.github.io/) (via `web-tree-sitter`/WASM). You author rules as **structural patterns + rewrite functions**; Trast matches them against the syntax tree and applies the rewrites as precise text edits (with source maps). The motivating use case is collapsing scaffolding conditionals — e.g. [Bati](https://batijs.dev/)'s feature flags — but the engine is general.
 
 ```ts
-// in:  if (BATI.has("auth")) { return <Dashboard /> } else { return <Landing /> }
-// out (features: ["auth"]):  return <Dashboard />
-// out (features: []):        return <Landing />
+// in:  if ($$.BATI.has("auth")) { return <Dashboard /> } else { return <Landing /> }
+// out, given { BATI: { has: (f) => f === "auth" } }:  return <Dashboard />
+// out, given { BATI: { has: () => false } }:          return <Landing />
 ```
 
 ## Packages
 
 | Package | Role |
 |---|---|
-| **`@trast/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, matcher, edit application (magic-string), `createTransformer`. |
+| **`@trast/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, matcher, edit application (magic-string), `createTransformer`, `evaluate`. |
 | **`@trast/match`** | Authoring: the `match` builder, `defineRules`, pattern compilation. Compiles a rule to **plain data** (`PatternNode` + `RegExp`) plus the user's rewrite. |
 | **`@trast/cli`** | `trast build` (compile rules to standalone modules) and `trast run` (apply to files). |
 | **`@trast/unplugin`** | Apply transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm. |
@@ -20,58 +20,74 @@ Structural, build-time code transformation built on [tree-sitter](https://tree-s
 
 Dependency graph: `@trast/core ← @trast/match ← @trast/cli`, and `@trast/core ← {@trast/vue, @trast/unplugin}`.
 
+## The `$$` namespace
+
+Conditions reference your build-time globals through a single namespace — `$$` by default, configurable. The **shape is yours**: type it once with a `declare global`, so source files type-check with no import, and the same name reads naturally inside directive comments.
+
+```ts
+// trast-env.d.ts
+declare global {
+  const $$: { BATI: { has(feature: string): boolean } }
+}
+export {}
+```
+
+```ts
+// any source file — type-checked, collapsed at build:
+if ($$.BATI.has("auth")) doThis() else doThat()
+```
+
+Declaring the namespace in `defineRules({ namespace: '$$' }, …)` also enables a **scan-gate**: a file that never mentions `$$` is returned untouched without being parsed, so only files that opt in pay for a parse. Pick a name distinctive enough to rarely appear by accident.
+
 ## Authoring rules
 
 ```ts
 import { defineRules } from '@trast/match'
-import { remove, type RichNode } from '@trast/core'
+import { remove, evaluate, type RichNode } from '@trast/core'
 
-export default defineRules<{ features: string[] }>((match) => [
-  // if (BATI.has("x")) { … } else { … }  → the taken branch
-  match.tsx.expr`if (BATI.has($feature)) { $$$then } else { $$$otherwise }`.rewrite(
-    ({ feature, then, otherwise }, ctx) =>
-      ctx.features.includes((feature as RichNode).text.slice(1, -1))
-        ? (then as RichNode[])
-        : (otherwise as RichNode[]),
-  ),
+type Ctx = { BATI: { has(feature: string): boolean } }
+const usesNamespace = ({ cond }: { cond: unknown }) => (cond as RichNode).text.includes('$$')
+
+export default defineRules<Ctx>({ namespace: '$$' }, (match) => [
+  // if ($$.…) { … } else { … }  → the taken branch
+  match.tsx.expr`if ($cond) { $$$then } else { $$$otherwise }`
+    .where(usesNamespace)
+    .rewrite(({ cond, then, otherwise }, ctx) =>
+      evaluate(cond as RichNode, ctx) ? (then as RichNode[]) : (otherwise as RichNode[])),
+
+  // // $$.…  above a declaration
+  match.tsx
+    .node('lexical_declaration')
+    .whenLeadingComment(/\$\$[^\n]*/)
+    .rewrite(({ node, commentMatch }, ctx) => (evaluate(commentMatch![0], ctx) ? node.text : remove)),
 ])
 
 export const targets = ['tsx'] // for `trast build`
 ```
 
 - **Patterns** are tagged templates: `match.<lang>.expr\`…\`` / `.type\`…\``, or `match.<lang>.node('type')`, or `match.any()`. `$x` captures a node, `$$$x` captures a run of siblings. Languages: `tsx`, `ts`, `js`, `html`, `css`.
-- **`.where(captures => boolean)`** — a context-free match guard, e.g. to match only `if`s whose condition references `BATI` (so a structural `if (...)` pattern stays precise and nested conditionals aren't skipped).
-- **`.whenLeadingComment(re)`** — gate on a directive comment (e.g. `// @bati auth`); the edit consumes the comment too.
-- **`.rewrite((captures, ctx) => result)`** — return a captured node / array (kept, re-transformed in place), a string, or `remove`. `ctx` is typed via `defineRules<Ctx>`.
+- **`.where(captures => boolean)`** — a context-free match guard. Capture the whole condition with `$cond` and gate on the namespace, so a structural `if (...)` pattern stays precise and nested conditionals aren't skipped.
+- **`.whenLeadingComment(re)`** — gate on a directive comment (e.g. `// $$.BATI.has("auth")`); the edit consumes the comment too. The capture is the expression `evaluate` then decides.
+- **`.rewrite((captures, ctx) => result)`** — return a captured node / array (kept, re-transformed in place), a string, or `remove`. `ctx` is the namespace value, typed via `defineRules<Ctx>`.
 
-### Compound conditions
+### `evaluate` — deciding a condition
 
-A structural pattern can't enumerate every `&&`/`||`/`!` shape, so capture the whole condition, gate with `.where`, and evaluate it in userland:
+`evaluate(condition, ctx)` computes a `$$`-rooted expression against the context value, without `eval`: the identifier root resolves to `ctx`, so `$$.BATI.has("auth")` is `ctx.BATI.has("auth")`, and `!` / `&&` / `||` / comparisons compose as in JS. It takes a captured node (an `if`/ternary condition) or a string (a comment's expression). So compound conditions need no rule-specific logic:
 
 ```ts
-match.tsx.expr`if ($cond) { $$$then } else { $$$otherwise }`
-  .where(({ cond }) => (cond as RichNode).text.includes('BATI.'))
-  .rewrite(({ cond, then, otherwise }, ctx) =>
-    evalBoolean(cond as RichNode, ctx.features) ? (then as RichNode[]) : (otherwise as RichNode[]))
+evaluate(/* $$.BATI.has("a") && !$$.BATI.has("b") */ cond, ctx) // → boolean
 ```
 
-`evalBoolean` is yours — recurse `parenthesized_expression`/`unary_expression`/`binary_expression` and resolve each `BATI.has("x")` leaf. Trast stays out of your domain semantics.
+A condition that isn't pure over the context (a runtime variable, an unsupported operator) asserts and names the offending node, rather than evaluating wrong.
 
 ## Using it
 
-**Dev mode** (no build step):
+**Dev mode** (no build step) — the context is your namespace value, functions and all:
 
 ```ts
 import rules from './bati-rules'
 const transform = await rules.forTarget('tsx')
-transform.transform(source, { features: ['auth'] })
-```
-
-**CLI:**
-
-```bash
-trast build bati-rules.ts --output dist/      # emit dist/<target>.js (+ barrel)
-trast run "src/**/*.tsx" --transformer dist/index.js --context '{"features":["auth"]}' --in-place
+transform.transform(source, { BATI: { has: (f) => enabled.has(f) } })
 ```
 
 **Bundler** (`@trast/unplugin`):
@@ -83,17 +99,26 @@ import { vueSplitter } from '@trast/vue'
 import rules from './bati-rules'
 
 export default {
-  plugins: [trast({ rules, context: { features: ['auth'] }, splitters: [vueSplitter] })],
+  plugins: [trast({ rules, context: { BATI: { has: (f) => enabled.has(f) } }, splitters: [vueSplitter] })],
 }
 ```
 
 (`/rollup`, `/rolldown`, `/esbuild`, `/webpack`, `/rspack`, `/farm` entries also exist.)
 
+**CLI:**
+
+```bash
+trast build bati-rules.ts --output dist/      # emit dist/<target>.js (+ barrel)
+trast run "src/**/*.tsx" --transformer dist/index.js --context '{"flags":{"auth":true}}' --in-place
+```
+
+`--context` is JSON, so the CLI suits a **data-shaped** namespace (`$$.flags.auth`, comparisons). A method-valued namespace like `$$.BATI.has(...)` can't be expressed as JSON — supply it through the programmatic API (dev mode / unplugin) instead.
+
 ## How it works
 
 `splitAndParse` turns a target into parsed zones (a single grammar → one zone; a `ZoneSplitter` → one per SFC section). Comments are attached to nodes, then a visitor walks each zone: the first rule to match (structurally + guard + comment gate) **claims** the node (outer-wins). A rewrite returning a kept subtree is transformed **in place** (the wrapper around it is removed and the kept nodes re-visited), so nesting collapses in one pass and source maps stay precise. Edits go through `magic-string`; whitespace clean-up is left to Prettier.
 
-`@trast/match` compiles a rule to serialisable data + the rewrite's source, so `trast build` emits modules that depend only on `@trast/core` — the pattern parser never ships to consumers.
+`@trast/match` compiles a rule to serialisable data + the rewrite's source (and the `@trast/core` helpers it references, like `evaluate`), so `trast build` emits modules that depend only on `@trast/core` — the pattern parser never ships to consumers.
 
 ## Development
 

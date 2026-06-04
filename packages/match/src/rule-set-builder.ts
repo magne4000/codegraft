@@ -12,9 +12,13 @@ import type { RawRule } from './types.js'
  */
 export class RuleSetBuilder<Ctx extends Record<string, unknown> = Record<string, unknown>> {
   readonly #rules: RawRule[]
+  /** The build-time global marker (e.g. `$$`) this set opts into, enabling the
+   *  source-scan optimisation; `undefined` when the set doesn't use one. */
+  readonly namespace: string | undefined
 
-  constructor(rules: RawRule[]) {
+  constructor(rules: RawRule[], namespace?: string) {
     this.#rules = rules
+    this.namespace = namespace
   }
 
   /** Compile the rules that apply to `target` (its grammars, plus every `any` rule) to
@@ -32,7 +36,7 @@ export class RuleSetBuilder<Ctx extends Record<string, unknown> = Record<string,
 
   /** Interpreted mode: compile for `target` and build a ready transformer. */
   async forTarget(target: GrammarId | ZoneSplitter): Promise<Transformer<Ctx>> {
-    return createTransformer<Ctx>(target, await this.compiledRulesFor(target)).init()
+    return createTransformer<Ctx>(target, await this.compiledRulesFor(target), this.namespace).init()
   }
 }
 

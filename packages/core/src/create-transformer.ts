@@ -30,10 +30,15 @@ interface RuntimeRule {
  * Build a lazy transformer for a target (a single grammar or a {@link ZoneSplitter})
  * from compiled rule data. `init()` loads the grammars and compiles each rule's data
  * into runtime functions once; the returned `Transformer` is synchronous. §7.
+ *
+ * `namespace` opts a rule set into the build-time global marker (e.g. `$$`): a source
+ * not containing it is returned untouched without being parsed, and the TypeScript
+ * grammar is ensured so `evaluate()` can parse directive-comment expressions.
  */
 export function createTransformer<Ctx extends Record<string, unknown> = Record<string, unknown>>(
   target: GrammarId | ZoneSplitter,
   rules: CompiledRule[],
+  namespace?: string,
 ): LazyTransformer<Ctx> {
   let pending: Promise<Transformer<Ctx>> | null = null
 
@@ -42,6 +47,7 @@ export function createTransformer<Ctx extends Record<string, unknown> = Record<s
     const grammars = typeof target === 'string' ? [target] : target.grammars
     for (const grammar of grammars) await Parser.loadGrammar(grammar)
     if (typeof target !== 'string') await target.init()
+    if (namespace !== undefined) await Parser.loadGrammar('typescript')
 
     const runtime: RuntimeRule[] = rules.map((rule) => ({
       language: rule.language,
@@ -53,6 +59,9 @@ export function createTransformer<Ctx extends Record<string, unknown> = Record<s
 
     function collect(source: string, context: Ctx): EditCollector {
       const collector = new EditCollector(source)
+      // Scan-gate: a source that never mentions the namespace can't match any rule, so
+      // skip parsing it entirely (the common case across a project's files).
+      if (namespace !== undefined && !source.includes(namespace)) return collector
       for (const zone of splitAndParse(source, target)) {
         attachComments(zone.tree)
         const zoneRules = runtime.filter((r) => r.language === zone.language || r.language === 'any')

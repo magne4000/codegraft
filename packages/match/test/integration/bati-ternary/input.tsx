@@ -1,1 +1,1 @@
-const view = BATI.has("auth") ? <Dashboard /> : <Landing />
+const view = $$.BATI.has("auth") ? <Dashboard /> : <Landing />

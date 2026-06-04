@@ -1,6 +1,6 @@
 const el = (
   <Button
     label="Go"
-    // @bati auth
+    // $$.BATI.has("auth")
   />
 )
