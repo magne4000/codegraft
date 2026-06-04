@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { main } from './cli.js'
 
-const IF_ELSE = 'if (BATI.has("auth")) { a() } else { b() }'
+const IF_ELSE = 'if ($$.flags.auth) { a() } else { b() }'
 const cliDir = fileURLToPath(new URL('..', import.meta.url))
 const fixture = join(cliDir, 'test', 'fixtures', 'bati-rules.ts')
 const distDir = join(cliDir, '.tmp', 'cli-dist')
@@ -35,7 +35,7 @@ describe('cli main', () => {
     const work = await mkdtemp(join(tmpdir(), 'trast-cli-'))
     await writeFile(join(work, 'page.tsx'), IF_ELSE)
     await main(
-      ['run', '*.tsx', '--transformer', join(distDir, 'index.js'), '--context', '{"features":["auth"]}', '--in-place'],
+      ['run', '*.tsx', '--transformer', join(distDir, 'index.js'), '--context', '{"flags":{"auth":true}}', '--in-place'],
       work,
     )
     expect(await readFile(join(work, 'page.tsx'), 'utf8')).toBe('a()')
@@ -45,7 +45,7 @@ describe('cli main', () => {
     const work = await mkdtemp(join(tmpdir(), 'trast-cli-'))
     await writeFile(join(work, 'page.tsx'), IF_ELSE)
     await main(
-      ['run', '*.tsx', '--transformer', join(distDir, 'index.js'), '--context', '{"features":["auth"]}'],
+      ['run', '*.tsx', '--transformer', join(distDir, 'index.js'), '--context', '{"flags":{"auth":true}}'],
       work,
     )
     expect(await readFile(join(work, 'page.tsx'), 'utf8')).toBe(IF_ELSE) // untouched

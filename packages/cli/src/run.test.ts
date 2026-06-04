@@ -8,19 +8,17 @@ import { defineRules } from '@trast/match'
 import { build } from './build.js'
 import { runFiles, run } from './run.js'
 
-const IF_ELSE = 'if (BATI.has("auth")) { a() } else { b() }'
+const IF_ELSE = 'if ($$.flags.auth) { a() } else { b() }'
 const cliDir = fileURLToPath(new URL('..', import.meta.url))
 
 async function tsxTransformers(): Promise<Record<string, LazyTransformer>> {
-  const rules = defineRules<{ features: string[] }>((match) => [
-    match.tsx.expr`if (BATI.has($feature)) { $$$then } else { $$$otherwise }`.rewrite(
-      ({ feature, then, otherwise }, ctx) =>
-        ctx.features.includes((feature as RichNode).text.slice(1, -1))
-          ? (then as RichNode[])
-          : (otherwise as RichNode[]),
+  const rules = defineRules<{ flags: Record<string, boolean> }>({ namespace: '$$' }, (match) => [
+    match.tsx.expr`if ($$.flags.$flag) { $$$then } else { $$$otherwise }`.rewrite(
+      ({ flag, then, otherwise }, ctx) =>
+        ctx.flags[(flag as RichNode).text] ? (then as RichNode[]) : (otherwise as RichNode[]),
     ),
   ])
-  return { tsx: createTransformer('tsx', await rules.compiledRulesFor('tsx')) }
+  return { tsx: createTransformer('tsx', await rules.compiledRulesFor('tsx'), rules.namespace) }
 }
 
 async function workdir(): Promise<string> {
@@ -42,7 +40,7 @@ describe('runFiles', () => {
       files: ['a.tsx', 'b.css'],
       cwd: dir,
       transformers,
-      context: { features: ['auth'] },
+      context: { flags: { auth: true } },
       mode: { kind: 'dry-run' },
     })
     expect(result.transformed).toEqual(['a.tsx'])
@@ -56,7 +54,7 @@ describe('runFiles', () => {
       files: ['a.tsx'],
       cwd: enabled,
       transformers,
-      context: { features: ['auth'] },
+      context: { flags: { auth: true } },
       mode: { kind: 'in-place' },
     })
     expect(await readFile(join(enabled, 'a.tsx'), 'utf8')).toBe('a()')
@@ -66,7 +64,7 @@ describe('runFiles', () => {
       files: ['a.tsx'],
       cwd: disabled,
       transformers,
-      context: { features: [] },
+      context: { flags: {} },
       mode: { kind: 'in-place' },
     })
     expect(await readFile(join(disabled, 'a.tsx'), 'utf8')).toBe('b()')
@@ -79,7 +77,7 @@ describe('runFiles', () => {
       files: ['a.tsx'],
       cwd: dir,
       transformers,
-      context: { features: ['auth'] },
+      context: { flags: { auth: true } },
       mode: { kind: 'out-dir', dir: out },
     })
     expect(await readFile(join(out, 'a.tsx'), 'utf8')).toBe('a()')
@@ -105,7 +103,7 @@ describe('run (glob + load)', () => {
       patterns: ['*.tsx'],
       cwd: work,
       transformerPath: join(distDir, 'index.js'),
-      context: { features: ['auth'] },
+      context: { flags: { auth: true } },
       mode: { kind: 'in-place' },
     })
     expect(result.transformed).toEqual(['page.tsx'])

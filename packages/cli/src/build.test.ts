@@ -57,12 +57,12 @@ describe('build (parity with dev mode)', () => {
 
     const dev = await (await import(pathToFileURL(fixture).href)).default.forTarget('tsx')
 
-    const src = 'if (BATI.has("auth")) { a() } else { b() }'
-    for (const features of [['auth'], [] as string[]]) {
-      const ctx = { features }
+    const src = 'if ($$.flags.auth) { a() } else { b() }'
+    for (const flags of [{ auth: true }, {}]) {
+      const ctx = { flags }
       expect(compiled.transform(src, ctx)).toBe(dev.transform(src, ctx))
     }
-    expect(compiled.transform(src, { features: ['auth'] })).toBe('a()')
-    expect(compiled.transform(src, { features: [] })).toBe('b()')
+    expect(compiled.transform(src, { flags: { auth: true } })).toBe('a()')
+    expect(compiled.transform(src, { flags: {} })).toBe('b()')
   })
 })
