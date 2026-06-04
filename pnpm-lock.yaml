@@ -20,6 +20,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@trast/codemod':
+        specifier: workspace:*
+        version: link:../codemod
       '@trast/core':
         specifier: workspace:*
         version: link:../core

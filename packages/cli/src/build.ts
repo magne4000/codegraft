@@ -4,7 +4,8 @@ import { pathToFileURL } from 'node:url'
 import type { GrammarId, ZoneSplitter } from '@trast/core'
 import { assert, grammarPackage } from '@trast/core/internal'
 import type { RuleSetBuilder } from '@trast/match'
-import { serialiseRules } from './serialise.js'
+import type { Codemod } from '@trast/codemod'
+import { serialiseRules, serialiseCodemod } from './serialise.js'
 
 type Target = GrammarId | ZoneSplitter
 
@@ -16,40 +17,62 @@ export interface BuildResult {
   grammarPackages: string[]
 }
 
-/** The `default` export (rule set) and `targets` export a rules file must provide. */
+/** The `default` export (a rule set or a codemod) and `targets` a rules file must provide. */
 interface RulesModule {
-  default: RuleSetBuilder
+  default: RuleSetBuilder | Codemod
   targets: Target[]
 }
 
+const isCodemod = (x: RuleSetBuilder | Codemod): x is Codemod =>
+  typeof (x as Codemod).fn === 'function'
+
 /**
- * `trast build`: import a compiled rules file and emit one transformer module per
- * declared target, a barrel, and a `package.json`. The rules file must be importable
- * by the running Node (compile TS first, or run under a loader) — §8.
+ * `trast build`: import a compiled rules/codemod file and emit one transformer module per
+ * declared target, a barrel, and a `package.json`. The file must be importable by the running
+ * Node (compile TS first, or run under a loader) — §8.
  */
 export async function build(rulesFile: string, outputDir: string): Promise<BuildResult> {
   const mod = (await import(pathToFileURL(rulesFile).href)) as Partial<RulesModule>
-  assert(mod.default, `rules file '${rulesFile}' has no default export (a defineRules result)`)
+  assert(mod.default, `rules file '${rulesFile}' has no default export (a defineRules / defineCodemod result)`)
   assert(Array.isArray(mod.targets), `rules file '${rulesFile}' must export a 'targets' array`)
-  return buildRules(mod.default, mod.targets, outputDir)
+  return isCodemod(mod.default)
+    ? buildCodemod(mod.default, mod.targets, outputDir)
+    : buildRules(mod.default, mod.targets, outputDir)
 }
 
-/**
- * Emit the per-target modules + barrel + package.json for an already-loaded rule set.
- * Separated from `build` so it is testable without a file import.
- */
+/** Emit the per-target modules + barrel + package.json for an already-loaded rule set. */
 export async function buildRules(
   ruleSet: RuleSetBuilder,
   targets: Target[],
   outputDir: string,
+): Promise<BuildResult> {
+  return emit(targets, outputDir, async (target) =>
+    serialiseRules(target, await ruleSet.compiledRulesFor(target), ruleSet.namespace),
+  )
+}
+
+/** Emit the per-target modules + barrel + package.json for an already-loaded codemod. */
+export async function buildCodemod(
+  codemod: Codemod,
+  targets: Target[],
+  outputDir: string,
+): Promise<BuildResult> {
+  const body = codemod.fn.toString()
+  return emit(targets, outputDir, (target) => serialiseCodemod(target, body, codemod.namespace))
+}
+
+/** Shared emit: one module per target, a barrel, and a package.json. */
+async function emit(
+  targets: Target[],
+  outputDir: string,
+  sourceFor: (target: Target) => string | Promise<string>,
 ): Promise<BuildResult> {
   await mkdir(outputDir, { recursive: true })
 
   const stems: string[] = []
   for (const target of targets) {
     const stem = typeof target === 'string' ? target : target.id
-    const source = serialiseRules(target, await ruleSet.compiledRulesFor(target), ruleSet.namespace)
-    await writeFile(join(outputDir, `${stem}.js`), source)
+    await writeFile(join(outputDir, `${stem}.js`), await sourceFor(target))
     stems.push(stem)
   }
 

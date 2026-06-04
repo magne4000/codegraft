@@ -10,6 +10,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@trast/codemod": "workspace:*",
     "@trast/core": "workspace:*",
     "@trast/match": "workspace:*"
   }
