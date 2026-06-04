@@ -150,14 +150,19 @@ export interface CompiledRule {
   rewrite: (captures: CaptureArg, context: Record<string, unknown>) => RewriteResult
 }
 
-/** Applies a compiled rule set to a source string. Synchronous once built. */
-export interface Transformer {
-  transform(source: string, context: Record<string, unknown>): string
+/**
+ * Applies a compiled rule set to a source string. Synchronous once built. `Ctx` is the
+ * run-context type a rule set is authored against (`defineRules<Ctx>`); it defaults to
+ * an open record and is constrained to a record so it can flow to each rewrite. Note
+ * that `Ctx` types only the *context* — captures stay dynamic (pattern-dependent).
+ */
+export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
+  transform(source: string, context: Ctx): string
 }
 
 /** A {@link Transformer} that has not yet loaded its WASM grammars. */
-export interface LazyTransformer {
+export interface LazyTransformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
   readonly target: GrammarId | ZoneSplitter
   /** Idempotent; WASM is loaded at most once per process. */
-  init(): Promise<Transformer>
+  init(): Promise<Transformer<Ctx>>
 }

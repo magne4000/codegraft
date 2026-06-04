@@ -1,1 +1,5 @@
-export { match } from './rule-builder.js'
+export { match, makeMatch } from './rule-builder.js'
+export type { Match } from './rule-builder.js'
+export { defineRules } from './define-rules.js'
+export { RuleSetBuilder } from './rule-set-builder.js'
+export type { RawRule, Rewrite, Guard } from './types.js'

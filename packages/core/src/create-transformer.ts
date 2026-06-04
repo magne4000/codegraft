@@ -31,13 +31,13 @@ interface RuntimeRule {
  * from compiled rule data. `init()` loads the grammars and compiles each rule's data
  * into runtime functions once; the returned `Transformer` is synchronous. §7.
  */
-export function createTransformer(
+export function createTransformer<Ctx extends Record<string, unknown> = Record<string, unknown>>(
   target: GrammarId | ZoneSplitter,
   rules: CompiledRule[],
-): LazyTransformer {
-  let pending: Promise<Transformer> | null = null
+): LazyTransformer<Ctx> {
+  let pending: Promise<Transformer<Ctx>> | null = null
 
-  async function build(): Promise<Transformer> {
+  async function build(): Promise<Transformer<Ctx>> {
     await Parser.init()
     const grammars = typeof target === 'string' ? [target] : target.grammars
     for (const grammar of grammars) await Parser.loadGrammar(grammar)
