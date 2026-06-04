@@ -1,3 +1,4 @@
+export { createTransformer } from './create-transformer.js'
 export { remove } from './types.js'
 export type {
   GrammarId,
