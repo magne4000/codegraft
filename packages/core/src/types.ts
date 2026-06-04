@@ -26,6 +26,15 @@ export interface ZoneSplitter {
   readonly id: string
   /** Which grammars this format can produce. */
   readonly grammars: GrammarId[]
+  /**
+   * How `trast build` imports this splitter into generated code, e.g.
+   * `{ importName: 'vueSplitter', importPath: '@trast/vue' }` → emits
+   * `import { vueSplitter } from '@trast/vue'`. A splitter describes its own import so
+   * new SFC formats need no hard-coded map in the serialiser. Required to be a build
+   * target; optional here so purely-runtime stub splitters (tests) can omit it.
+   */
+  readonly importName?: string
+  readonly importPath?: string
   /** Idempotent; loads the splitter's own parsing grammar. */
   init(): Promise<void>
   split(source: string): Array<{ language: GrammarId; source: string; startOffset: number }>

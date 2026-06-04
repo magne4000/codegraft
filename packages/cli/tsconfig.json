@@ -4,6 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "references": [{ "path": "../match" }],
-  "include": ["src"]
+  "references": [{ "path": "../core" }, { "path": "../match" }],
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
 }

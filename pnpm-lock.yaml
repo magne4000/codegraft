@@ -20,6 +20,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@trast/core':
+        specifier: workspace:*
+        version: link:../core
       '@trast/match':
         specifier: workspace:*
         version: link:../match
