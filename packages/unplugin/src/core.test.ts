@@ -9,7 +9,10 @@ const IF_ELSE = 'if (BATI.has("auth")) { a() } else { b() }'
 
 // unplugin's transform hook is invoked with a build-context `this`; the Trast body
 // doesn't use it, so a cast suffices for direct testing.
-type TransformFn = (code: string, id: string) => Promise<{ code: string } | null>
+type TransformFn = (
+  code: string,
+  id: string,
+) => Promise<{ code: string; map?: { version: number; sources: string[] } } | null>
 const callTransform = (opts: ReturnType<typeof makeUnpluginOptions>, code: string, id: string) =>
   (opts.transform as unknown as TransformFn)(code, id)
 
@@ -41,6 +44,13 @@ describe('makeUnpluginOptions', () => {
 
     const disabled = makeUnpluginOptions({ rules, context: { features: [] } })
     expect((await callTransform(disabled, IF_ELSE, '/app/Page.tsx'))?.code).toBe('b()')
+  })
+
+  it('returns a source map alongside transformed code', async () => {
+    const opts = makeUnpluginOptions({ rules, context: { features: ['auth'] } })
+    const result = await callTransform(opts, IF_ELSE, '/app/Page.tsx')
+    expect(result?.map?.version).toBe(3)
+    expect(result?.map?.sources).toContain('/app/Page.tsx')
   })
 
   it('returns null for unchanged code and unhandled extensions (so the bundler skips it)', async () => {

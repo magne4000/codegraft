@@ -77,10 +77,8 @@ export function makeUnpluginOptions<Ctx extends Record<string, unknown>>(
         pending = options.rules.forTarget(target)
         cache.set(key, pending)
       }
-      const output = (await pending).transform(code, options.context)
-      // No sourcemap yet: Trast does string-slice edits plus recursive re-emit, so a
-      // precise map is non-trivial. Returning code-only is fine for feature-flag DCE.
-      return output === code ? null : { code: output, map: null }
+      const result = (await pending).transformWithMap(code, options.context, { source: id })
+      return result.code === code ? null : { code: result.code, map: result.map }
     },
   }
 }

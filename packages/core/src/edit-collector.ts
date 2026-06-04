@@ -1,43 +1,49 @@
-import type { Edit } from './types.js'
+import MagicString from 'magic-string'
+import type { SourceMap } from './types.js'
 
 /**
- * Collects document-space edits and applies them to a source string.
+ * Collects edits against a source string and produces the transformed code (and, on
+ * demand, a source map) via magic-string.
  *
  * Overlap is resolved **first-wins**: an edit overlapping one already accepted is
- * dropped silently. This is what makes "outer-wins" hold at the text layer — the
- * outer match's edit lands first and a nested match's edit over the same span is
- * discarded. `apply` runs edits in reverse offset order so each splice leaves the
- * offsets of not-yet-applied (earlier) edits untouched.
+ * dropped silently — the text-layer side of outer-wins. Because edits are applied
+ * through magic-string at their original offsets, the kept text keeps its original
+ * position, so the generated map is precise.
  */
 export class EditCollector {
-  readonly #edits: Edit[] = []
+  readonly #magic: MagicString
+  readonly #claimed: Array<[number, number]> = []
 
-  add(edit: Edit): void {
-    // Half-open intervals [start, end): they overlap iff each starts before the
-    // other ends. Touching at a boundary (e.end === edit.start) is not an overlap.
-    for (const e of this.#edits) {
-      if (e.start < edit.end && edit.start < e.end) return
-    }
-    const at = this.#edits.findIndex((e) => e.start > edit.start)
-    if (at === -1) this.#edits.push(edit)
-    else this.#edits.splice(at, 0, edit)
+  constructor(source: string) {
+    this.#magic = new MagicString(source)
   }
 
-  apply(source: string): string {
-    return this.applyToSpan(source, 0, source.length)
+  /** Replace `[start, end)` with `replacement` (an empty range inserts before `start`). */
+  overwrite(start: number, end: number, replacement: string): void {
+    if (!this.#claim(start, end)) return
+    if (start === end) this.#magic.appendLeft(start, replacement)
+    else this.#magic.update(start, end, replacement)
   }
 
-  /**
-   * Apply the edits to just the `[start, end)` slice of `source` and return the
-   * transformed slice. Every edit must fall within that range — the recursive
-   * transform of a kept subtree relies on this to re-emit only that subtree, with
-   * its own nested edits baked in.
-   */
-  applyToSpan(source: string, start: number, end: number): string {
-    let text = source.slice(start, end)
-    for (const edit of [...this.#edits].reverse()) {
-      text = text.slice(0, edit.start - start) + edit.replacement + text.slice(edit.end - start)
-    }
-    return text
+  /** Delete `[start, end)`. */
+  remove(start: number, end: number): void {
+    if (start === end || !this.#claim(start, end)) return
+    this.#magic.remove(start, end)
+  }
+
+  toString(): string {
+    return this.#magic.toString()
+  }
+
+  generateMap(source: string): SourceMap {
+    return this.#magic.generateMap({ source, includeContent: true, hires: true })
+  }
+
+  // Half-open intervals [start, end): reject one overlapping an accepted edit (touching
+  // boundaries don't overlap), so magic-string never sees a conflicting operation.
+  #claim(start: number, end: number): boolean {
+    if (this.#claimed.some(([s, e]) => s < end && start < e)) return false
+    this.#claimed.push([start, end])
+    return true
   }
 }

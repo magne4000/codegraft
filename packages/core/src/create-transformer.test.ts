@@ -130,6 +130,18 @@ describe('createTransformer', () => {
     expect(out).toBe('TS' + MARKER + 'a { /*css*/ }')
   })
 
+  it('transformWithMap returns the code plus a v3 source map', async () => {
+    const t = await createTransformer('typescript', [
+      rule('typescript', { kind: 'node', nodeType: 'debugger_statement' }, () => remove),
+    ]).init()
+    const { code, map } = t.transformWithMap('debugger;\nconst x = 1', {}, { source: 'a.ts' })
+    expect(code).toBe('\nconst x = 1')
+    expect(map.version).toBe(3)
+    expect(map.sources).toContain('a.ts')
+    expect(map.mappings.length).toBeGreaterThan(0)
+    expect(map.sourcesContent?.[0]).toBe('debugger;\nconst x = 1') // original retained
+  })
+
   it('an "any" rule runs on every zone of a split target', async () => {
     // 'any' matches the first node visited — each zone's root — so each zone collapses
     const t = await createTransformer(stub, [rule('any', { kind: 'any' }, () => 'X')]).init()

@@ -29,6 +29,9 @@ importers:
 
   packages/core:
     dependencies:
+      magic-string:
+        specifier: ^0.30.0
+        version: 0.30.21
       web-tree-sitter:
         specifier: ^0.25.0
         version: 0.25.10

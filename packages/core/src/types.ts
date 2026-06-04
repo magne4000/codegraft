@@ -159,6 +159,19 @@ export interface CompiledRule {
   rewrite: (captures: CaptureArg, context: Record<string, unknown>) => RewriteResult
 }
 
+/** A source map, structurally compatible with magic-string's (kept here so this module
+ *  stays import-free). */
+export interface SourceMap {
+  version: number
+  file?: string
+  sources: string[]
+  sourcesContent?: (string | null)[]
+  names: string[]
+  mappings: string
+  toString(): string
+  toUrl(): string
+}
+
 /**
  * Applies a compiled rule set to a source string. Synchronous once built. `Ctx` is the
  * run-context type a rule set is authored against (`defineRules<Ctx>`); it defaults to
@@ -167,6 +180,9 @@ export interface CompiledRule {
  */
 export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
   transform(source: string, context: Ctx): string
+  /** Like {@link transform} but also returns a source map (`options.source` names the
+   *  input in the map). Used by build-pipeline integrations such as `@trast/unplugin`. */
+  transformWithMap(source: string, context: Ctx, options?: { source?: string }): { code: string; map: SourceMap }
 }
 
 /** A {@link Transformer} that has not yet loaded its WASM grammars. */
