@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import type { GrammarId, ZoneSplitter } from '@trast/core'
-import { Parser, type Node } from '@trast/core/internal'
+import { Parser, assert, type Node } from '@trast/core/internal'
 
 // The vue grammar wasm is vendored in this package (tree-sitter-vue ships no prebuilt
 // wasm), so @trast/vue owns its grammar with no tree-sitter-vue dependency.
@@ -40,11 +40,15 @@ export const vueSplitter: ZoneSplitter = {
 function sectionZone(section: Node, source: string): RawZone | null {
   switch (section.type) {
     case 'template_element': {
-      // content lives between the start and end tags
-      const start = childByType(section, 'start_tag')?.endIndex
-      const end = childByType(section, 'end_tag')?.startIndex
-      if (start === undefined || end === undefined) return null
-      return { language: 'html', source: source.slice(start, end), startOffset: start }
+      const startTag = childByType(section, 'start_tag')
+      const endTag = childByType(section, 'end_tag')
+      assert(startTag && endTag, 'a <template> element must have start and end tags')
+      // content lives between the tags
+      return {
+        language: 'html',
+        source: source.slice(startTag.endIndex, endTag.startIndex),
+        startOffset: startTag.endIndex,
+      }
     }
     case 'script_element': {
       const body = childByType(section, 'raw_text')

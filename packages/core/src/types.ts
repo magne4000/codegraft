@@ -41,15 +41,10 @@ export interface ZoneSplitter {
 }
 
 /**
- * A lazy wrapper over a tree-sitter `SyntaxNode`. Reads type/text/positions
- * straight from the backing node on each access; `children` and `allChildren` are
- * computed once and cached. The comment arrays start empty and are filled in by the
- * comment-attachment pass.
- *
- * All offset accessors come in two flavours: `startIndex`/`endIndex` are relative
- * to the *zone* source, `documentStartIndex`/`documentEndIndex` are absolute in the
- * original document (`startIndex + zone.startOffset`). Edits are always expressed in
- * document space, so they never need remapping.
+ * Lazy wrapper over the backing tree-sitter node. `children`/`allChildren` are cached;
+ * comment arrays are filled by the attachment pass. Offsets come in two frames:
+ * `startIndex`/`endIndex` are zone-relative, `documentStartIndex`/`documentEndIndex`
+ * absolute — so edits, always in document space, never need remapping.
  */
 export interface RichNode {
   readonly type: string
@@ -91,11 +86,9 @@ export interface Zone {
 }
 
 /**
- * The object passed as the first argument to every rewrite callback. `node` and the
- * named captures are always `RichNode`/`RichNode[]`; `commentMatch` is present only
- * for comment-gated rules. The index signature is widened to admit `commentMatch`
- * so the type stays sound — an intersection with `Record<string, RichNode |
- * RichNode[]>` would reject the `RegExpExecArray`.
+ * The first argument to every rewrite: `node` plus the named captures, and
+ * `commentMatch` for comment-gated rules. The index signature is widened (rather than
+ * intersected) so it admits the `RegExpExecArray` soundly.
  */
 export type CaptureArg = {
   node: RichNode

@@ -1,6 +1,7 @@
 import { createFilter, type FilterPattern } from 'unplugin-utils'
 import type { UnpluginOptions } from 'unplugin'
 import type { GrammarId, Transformer, ZoneSplitter } from '@trast/core'
+import { EXTENSION_GRAMMAR } from '@trast/core/internal'
 import type { RuleSetBuilder } from '@trast/match'
 
 export interface TrastOptions<Ctx extends Record<string, unknown>> {
@@ -18,22 +19,6 @@ export interface TrastOptions<Ctx extends Record<string, unknown>> {
   /** Limit which module ids are transformed (defaults to all handled extensions). */
   include?: FilterPattern
   exclude?: FilterPattern
-}
-
-/** File extension → the grammar that handles it. v1 covers single-grammar files; `.vue`
- *  (which needs the deferred @trast/vue splitter) is intentionally absent. */
-const EXTENSION_GRAMMAR: Record<string, GrammarId> = {
-  tsx: 'tsx',
-  jsx: 'tsx',
-  ts: 'typescript',
-  mts: 'typescript',
-  cts: 'typescript',
-  js: 'javascript',
-  mjs: 'javascript',
-  cjs: 'javascript',
-  html: 'html',
-  htm: 'html',
-  css: 'css',
 }
 
 function extensionOf(id: string): string {

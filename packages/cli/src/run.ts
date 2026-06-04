@@ -2,26 +2,12 @@ import { glob, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { LazyTransformer, Transformer } from '@trast/core'
+import { EXTENSION_GRAMMAR } from '@trast/core/internal'
 
-/** The named exports of a compiled transformer barrel (`dist/index.js`): a lazy
- *  transformer per target stem (`tsx`, `typescript`, `vue`, …). */
 type TransformerMap = Record<string, LazyTransformer>
 
-/** File extension (no dot) → the barrel export stem that handles it. */
-const EXTENSION_TARGET: Record<string, string> = {
-  tsx: 'tsx',
-  jsx: 'tsx',
-  ts: 'typescript',
-  mts: 'typescript',
-  cts: 'typescript',
-  js: 'javascript',
-  mjs: 'javascript',
-  cjs: 'javascript',
-  vue: 'vue',
-  html: 'html',
-  htm: 'html',
-  css: 'css',
-}
+// File extension → barrel export stem: the shared grammar map plus SFC splitter stems.
+const EXTENSION_TARGET: Record<string, string> = { ...EXTENSION_GRAMMAR, vue: 'vue' }
 
 export type RunMode =
   | { kind: 'dry-run' } // report changes, write nothing
