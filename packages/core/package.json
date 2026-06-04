@@ -1,0 +1,36 @@
+{
+  "name": "@trast/core",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "web-tree-sitter": "^0.25.0"
+  },
+  "peerDependencies": {
+    "tree-sitter-css": "^0.25.0",
+    "tree-sitter-html": "^0.23.0",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.0"
+  },
+  "peerDependenciesMeta": {
+    "tree-sitter-css": { "optional": true },
+    "tree-sitter-html": { "optional": true },
+    "tree-sitter-javascript": { "optional": true },
+    "tree-sitter-typescript": { "optional": true }
+  },
+  "devDependencies": {
+    "tree-sitter-css": "^0.25.0",
+    "tree-sitter-html": "^0.23.0",
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.0"
+  }
+}

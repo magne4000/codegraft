@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/match" },
+    { "path": "./packages/vue" },
+    { "path": "./packages/cli" }
+  ]
+}

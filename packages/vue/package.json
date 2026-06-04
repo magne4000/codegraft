@@ -1,0 +1,26 @@
+{
+  "name": "@trast/vue",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@trast/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "tree-sitter-javascript": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.0"
+  },
+  "peerDependenciesMeta": {
+    "tree-sitter-javascript": { "optional": true },
+    "tree-sitter-typescript": { "optional": true }
+  }
+}

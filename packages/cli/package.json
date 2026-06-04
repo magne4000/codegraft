@@ -1,0 +1,15 @@
+{
+  "name": "@trast/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "bin": {
+    "trast": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@trast/match": "workspace:*"
+  }
+}
