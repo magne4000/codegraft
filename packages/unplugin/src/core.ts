@@ -1,11 +1,15 @@
 import type { FilterPattern, UnpluginOptions } from 'unplugin'
 import type { GrammarId, Transformer, ZoneSplitter } from '@trast/core'
 import { EXTENSION_GRAMMAR } from '@trast/core/internal'
-import type { RuleSetBuilder } from '@trast/match'
+
+/** Anything that builds a transformer for a target — a `defineCodemod` or `defineRules` result. */
+interface TransformerSource<Ctx extends Record<string, unknown>> {
+  forTarget(target: GrammarId | ZoneSplitter): Promise<Transformer<Ctx>>
+}
 
 export interface TrastOptions<Ctx extends Record<string, unknown>> {
-  /** A `defineRules(...)` result. */
-  rules: RuleSetBuilder<Ctx>
+  /** A `defineCodemod(...)` or `defineRules(...)` result. */
+  rules: TransformerSource<Ctx>
   /** The run context threaded into every rewrite. */
   context: Ctx
   /**

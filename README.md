@@ -12,13 +12,14 @@ Structural, build-time code transformation built on [tree-sitter](https://tree-s
 
 | Package | Role |
 |---|---|
-| **`@trast/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, matcher, edit application (magic-string), `createTransformer`, `evaluate`. |
-| **`@trast/match`** | Authoring: the `match` builder, `defineRules`, pattern compilation. Compiles a rule to **plain data** (`PatternNode` + `RegExp`) plus the user's rewrite. |
-| **`@trast/cli`** | `trast build` (compile rules to standalone modules) and `trast run` (apply to files). |
+| **`@trast/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, the `Collection`, scope `Resolver`, edit application (magic-string), `createCodemodTransformer` / `createTransformer`, `evaluate`. |
+| **`@trast/codemod`** | Authoring (primary): `defineCodemod` — a jscodeshift-style collection API (find / navigate / edit / insert / scope). |
+| **`@trast/match`** | Authoring (declarative alternative): the `match` builder, `defineRules`, structural pattern templates. |
+| **`@trast/cli`** | `trast build` (compile a codemod/rule set to standalone modules) and `trast run` (apply to files). |
 | **`@trast/unplugin`** | Apply transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm. |
 | **`@trast/vue`** | `vueSplitter` — split a `.vue` SFC into `<template>`/`<script>`/`<style>` zones. |
 
-Dependency graph: `@trast/core ← @trast/match ← @trast/cli`, and `@trast/core ← {@trast/vue, @trast/unplugin}`.
+Dependency graph: `@trast/core ← {@trast/codemod, @trast/match} ← @trast/cli`, and `@trast/core ← {@trast/vue, @trast/unplugin}`.
 
 ## The `$$` namespace
 
@@ -37,9 +38,50 @@ export {}
 if ($$.BATI.has("auth")) doThis() else doThat()
 ```
 
-Declaring the namespace in `defineRules({ namespace: '$$' }, …)` also enables a **scan-gate**: a file that never mentions `$$` is returned untouched without being parsed, so only files that opt in pay for a parse. Pick a name distinctive enough to rarely appear by accident.
+Declaring the namespace (in `defineCodemod({ namespace: '$$' }, …)` or `defineRules({ namespace: '$$' }, …)`) also enables a **scan-gate**: a file that never mentions `$$` is returned untouched without being parsed, so only files that opt in pay for a parse. Pick a name distinctive enough to rarely appear by accident.
 
-## Authoring rules
+## Codemod API (`@trast/codemod`)
+
+The primary authoring surface: a jscodeshift-style collection over the CST that records magic-string edits. `find`/`filter`/`closest`/`parent`/`children` query; `replaceWith`/`remove`/`unwrap` edit; `insertBefore`/`insertAfter`/`append`/`prepend`/`ensureImport` insert; `references`/`definition` resolve bindings (JS/TS/TSX). Everything hangs off `root`/`ctx`, so a codemod serialises for `trast build`.
+
+```ts
+import { defineCodemod } from '@trast/codemod'
+
+// Collapse build-time conditionals (the Bati case), nesting-safe:
+export default defineCodemod<Ctx>({ namespace: '$$' }, (root, ctx) => {
+  root.find('if_statement').forEach((node) => {
+    const cond = node.field('condition')
+    if (!cond.text.includes('$$')) return
+    if (cond.evaluate(ctx)) node.unwrap(node.field('consequence').children())
+    else node.remove()
+  })
+})
+export const targets = ['tsx'] // for `trast build`
+```
+
+**Insertion** is the thing the template model can't do — e.g. register a Vite plugin idempotently:
+
+```ts
+export default defineCodemod((root) => {
+  const plugins = root
+    .find('call_expression', { function: 'defineConfig' })
+    .find('pair', { key: 'plugins' }).find('array').first()
+  if (plugins.size() && plugins.find('call_expression', { function: 'myPlugin' }).size() === 0) {
+    plugins.append('myPlugin()')
+    root.ensureImport("import myPlugin from 'my-plugin'")
+  }
+})
+```
+
+**Scope** (`node.references()` / `node.definition()`) is **confident-or-abstain**: it returns `null` rather than guess when a tree contains a construct it doesn't fully model (`with`, `eval`, a TS namespace/enum, an object shorthand), so a rename never fires on a guess. JS/TS/TSX only; other languages return `null`. Vocabulary is **tree-sitter-native** — node types and field names are the grammar's own (`call_expression`, field `function`), no Babel alias layer.
+
+```ts
+root.find('identifier', { text: 'oldName' }).forEach((id) => {
+  id.references()?.replaceWith('newName') // null → abstain, leave it alone
+})
+```
+
+## Declarative rules (`@trast/match`, alternative)
 
 ```ts
 import { defineRules } from '@trast/match'
