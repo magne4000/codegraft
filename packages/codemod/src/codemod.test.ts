@@ -52,3 +52,44 @@ describe('defineCodemod — query + edits', () => {
     expect(t.transform('init()', {})).toBe('init()') // already present → untouched
   })
 })
+
+describe('defineCodemod — unwrap (nested collapse) + directives', () => {
+  // Collapse `if ($$.x) { … }` (no else) by evaluating the condition; unwrap keeps the body and
+  // drops the wrapper, so an inner `if` collapses in the same pass.
+  const collapse = defineCodemod<Record<string, boolean>>({ namespace: '$$' }, (root, ctx) => {
+    root.find('if_statement').forEach((node) => {
+      const cond = node.field('condition')
+      if (!cond.text.includes('$$')) return
+      if (cond.evaluate(ctx)) node.unwrap(node.field('consequence').children())
+      else node.remove()
+    })
+  })
+
+  it('collapses nested conditionals in one pass', async () => {
+    const t = await collapse.forTarget('tsx')
+    const src = 'if ($$.a) {\n  if ($$.b) {\n    yes()\n  }\n}'
+    expect(t.transform(src, { a: true, b: true })).toBe('yes()')
+    expect(t.transform(src, { a: true, b: false })).toBe('')
+    expect(t.transform(src, { a: false, b: true })).toBe('')
+  })
+
+  it('leaves non-$$ ifs untouched (the scan-gate + guard)', async () => {
+    const t = await collapse.forTarget('tsx')
+    expect(t.transform('if (other) { a() }', { a: true })).toBe('if (other) { a() }')
+  })
+
+  it('gates a declaration on a directive comment, consuming the directive', async () => {
+    const cm = defineCodemod<Record<string, boolean>>({ namespace: '$$' }, (root, ctx) => {
+      root.find('lexical_declaration').forEach((decl) => {
+        const m = decl.directive(/\$\$[^\n]*/)
+        if (!m) return
+        decl.dropDirective(/\$\$/)
+        if (!decl.evaluateExpression(m[0], ctx)) decl.remove()
+      })
+    })
+    const t = await cm.forTarget('tsx')
+    expect(t.transform('// $$.auth\nconst x = 1', { auth: true })).toBe('const x = 1')
+    expect(t.transform('// $$.auth\nconst x = 1', { auth: false })).toBe('')
+    expect(t.transform('const y = 2', { auth: false })).toBe('const y = 2')
+  })
+})

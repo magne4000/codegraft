@@ -141,6 +141,52 @@ export class Collection {
     return this
   }
 
+  /**
+   * Narrow-delete: keep `keep` (a 0+-node selection within this node) and drop the wrapper
+   * around it — remove `[this.start, firstKept.start)` and `[lastKept.end, this.end)`. The
+   * kept range stays editable, so edits made to nodes inside it in the same pass still compose
+   * (this is what lets nested conditionals collapse in one pass). Empty `keep` removes the whole
+   * node.
+   */
+  unwrap(keep: Collection): this {
+    const wrapper = this.#single()
+    const kept = keep.#nodes
+    if (kept.length === 0) {
+      this.#session.collector.remove(wrapper.documentStartIndex, wrapper.documentEndIndex)
+      return this
+    }
+    this.#session.collector.remove(wrapper.documentStartIndex, kept[0].documentStartIndex)
+    this.#session.collector.remove(kept[kept.length - 1].documentEndIndex, wrapper.documentEndIndex)
+    return this
+  }
+
+  // ---- comment directives ----
+
+  /** The first leading comment matching `pattern`, as a `RegExpMatchArray` (use a capture group
+   *  to extract the expression), or `null`. Read it, then `dropDirective` to strip it. */
+  directive(pattern: RegExp): RegExpMatchArray | null {
+    for (const comment of this.#single().leadingComments) {
+      const match = comment.text.match(pattern)
+      if (match) return match
+    }
+    return null
+  }
+
+  /** Remove a matching leading directive comment (and the gap up to this node), keeping the node
+   *  itself. Compose with `remove()` to drop both. */
+  dropDirective(pattern: RegExp): this {
+    const node = this.#single()
+    const comment = node.leadingComments.find((c) => pattern.test(c.text))
+    if (comment) this.#session.collector.remove(comment.documentStartIndex, node.documentStartIndex)
+    return this
+  }
+
+  /** Evaluate a string expression (e.g. a directive's captured text) against `context`. Parsed as
+   *  TypeScript — available because a namespaced codemod ensures that grammar. */
+  evaluateExpression(expression: string, context: unknown): unknown {
+    return evaluateNode(expression, context)
+  }
+
   // ---- internals ----
 
   #select(nodes: RichNode[]): Collection {
