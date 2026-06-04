@@ -160,6 +160,61 @@ export class Collection {
     return this
   }
 
+  // ---- insertion ----
+
+  /** Insert `text` immediately before each selected node. */
+  insertBefore(text: string): this {
+    for (const node of this.#nodes) this.#session.collector.insertLeft(node.documentStartIndex, text)
+    return this
+  }
+
+  /** Insert `text` immediately after each selected node. */
+  insertAfter(text: string): this {
+    for (const node of this.#nodes) this.#session.collector.insertRight(node.documentEndIndex, text)
+    return this
+  }
+
+  /** Append `text` as the last element of each container node (array/object/argument list/block):
+   *  after the last element with the right separator, or just inside an empty container. */
+  append(text: string): this {
+    for (const node of this.#nodes) {
+      const elements = node.children
+      if (elements.length === 0) this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text)
+      else this.#session.collector.insertRight(elements[elements.length - 1].documentEndIndex, separatorFor(node) + text)
+    }
+    return this
+  }
+
+  /** Prepend `text` as the first element of each container node. */
+  prepend(text: string): this {
+    for (const node of this.#nodes) {
+      const open = openDelimiter(node).documentEndIndex
+      const elements = node.children
+      this.#session.collector.insertRight(open, elements.length === 0 ? text : text + separatorFor(node))
+    }
+    return this
+  }
+
+  /** Insert a top-level import once: a no-op if a statement importing the same module already
+   *  exists. Placed after the last existing import, else before the first node. */
+  ensureImport(statement: string): this {
+    const source = importSource(statement)
+    const imports = this.find('import_statement').#nodes
+    if (imports.some((imp) => importSource(imp.text) === source)) return this
+    if (imports.length > 0) {
+      this.#session.collector.insertRight(imports[imports.length - 1].documentEndIndex, '\n' + statement)
+    } else {
+      this.#session.collector.insertLeft(this.#firstNode().documentStartIndex, statement + '\n')
+    }
+    return this
+  }
+
+  /** Insert `text` at the very start of the first selected node (typically the file). */
+  prependToFile(text: string): this {
+    this.#session.collector.insertLeft(this.#firstNode().documentStartIndex, text)
+    return this
+  }
+
   // ---- comment directives ----
 
   /** The first leading comment matching `pattern`, as a `RegExpMatchArray` (use a capture group
@@ -196,6 +251,30 @@ export class Collection {
     assert(this.#nodes.length === 1, `expected a single node, got ${this.#nodes.length}`)
     return this.#nodes[0]
   }
+  #firstNode(): RichNode {
+    assert(this.#nodes.length > 0, 'collection is empty')
+    return this.#nodes.reduce((a, b) => (b.documentStartIndex < a.documentStartIndex ? b : a))
+  }
+}
+
+/** The opening delimiter token (`[` / `{` / `(`) of a container node. */
+function openDelimiter(node: RichNode): RichNode {
+  const open = node.allChildren[0]
+  assert(open, `container '${node.type}' has no opening delimiter`)
+  return open
+}
+
+const NEWLINE_CONTAINERS = new Set(['statement_block', 'class_body', 'program'])
+/** Separator between a container's elements: newline for statement lists, comma otherwise. */
+function separatorFor(node: RichNode): string {
+  return NEWLINE_CONTAINERS.has(node.type) ? '\n' : ', '
+}
+
+/** The module specifier of an import statement's source text, for idempotent `ensureImport`. */
+function importSource(statementText: string): string | null {
+  const match =
+    statementText.match(/from\s*['"]([^'"]+)['"]/) ?? statementText.match(/import\s*['"]([^'"]+)['"]/)
+  return match ? match[1] : null
 }
 
 function matches(node: RichNode, attrs?: Record<string, AttrMatcher>): boolean {

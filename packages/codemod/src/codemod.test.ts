@@ -93,3 +93,55 @@ describe('defineCodemod — unwrap (nested collapse) + directives', () => {
     expect(t.transform('const y = 2', { auth: false })).toBe('const y = 2')
   })
 })
+
+describe('defineCodemod — insertion', () => {
+  it('insertBefore / insertAfter a node', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('call_expression', { function: 'go' }).insertBefore('before;\n').insertAfter(';after')
+    }).forTarget('tsx')
+    expect(t.transform('go()', {})).toBe('before;\ngo();after')
+  })
+
+  it('append / prepend into an array (and an empty one)', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('array').first().append('c').prepend('a0')
+    }).forTarget('tsx')
+    expect(t.transform('const x = [a, b]', {})).toBe('const x = [a0, a, b, c]')
+
+    const empty = await defineCodemod((root) => root.find('array').first().append('only')).forTarget('tsx')
+    expect(empty.transform('const x = []', {})).toBe('const x = [only]')
+  })
+
+  it('ensureImport is idempotent and lands after existing imports', async () => {
+    const t = await defineCodemod((root) => root.ensureImport("import p from 'p'")).forTarget('tsx')
+    expect(t.transform("import a from 'a'\nconst x = 1", {})).toBe("import a from 'a'\nimport p from 'p'\nconst x = 1")
+    expect(t.transform("import p from 'p'\nconst x = 1", {})).toBe("import p from 'p'\nconst x = 1")
+    expect(t.transform('const x = 1', {})).toBe("import p from 'p'\nconst x = 1")
+  })
+
+  it('vite.config flagship: register a plugin + its import, idempotently', async () => {
+    const cm = defineCodemod((root) => {
+      const plugins = root
+        .find('call_expression', { function: 'defineConfig' })
+        .find('pair', { key: 'plugins' })
+        .find('array')
+        .first()
+      if (plugins.size() && plugins.find('call_expression', { function: 'myPlugin' }).size() === 0) {
+        plugins.append('myPlugin()')
+        root.ensureImport("import myPlugin from 'my-plugin'")
+      }
+    })
+    const t = await cm.forTarget('tsx')
+    const src = [
+      "import { defineConfig } from 'vite'",
+      'export default defineConfig({',
+      '  plugins: [react()],',
+      '})',
+      '',
+    ].join('\n')
+    const out = t.transform(src, {})
+    expect(out).toContain("import myPlugin from 'my-plugin'")
+    expect(out).toContain('plugins: [react(), myPlugin()]')
+    expect(t.transform(out, {})).toBe(out) // idempotent
+  })
+})

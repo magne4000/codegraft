@@ -31,6 +31,17 @@ export class EditCollector {
     this.#magic.remove(start, end)
   }
 
+  /** Insert `text` at `index`, attached to the left chunk. A point insertion: it claims no
+   *  range, so it composes with edits on either side (and survives removal of the right side). */
+  insertLeft(index: number, text: string): void {
+    this.#magic.appendLeft(index, text)
+  }
+
+  /** Insert `text` at `index`, attached to the right chunk. */
+  insertRight(index: number, text: string): void {
+    this.#magic.appendRight(index, text)
+  }
+
   toString(): string {
     return this.#magic.toString()
   }
