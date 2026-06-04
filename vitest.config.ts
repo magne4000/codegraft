@@ -7,11 +7,15 @@ const src = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@trast/core': src('./packages/core/src/index.ts'),
-      '@trast/match': src('./packages/match/src/index.ts'),
-      '@trast/vue': src('./packages/vue/src/index.ts'),
-    },
+    // Array form: entries are matched in order, so the more specific "/internal"
+    // subpath must precede the bare package alias.
+    alias: [
+      { find: '@trast/core/internal', replacement: src('./packages/core/src/internal.ts') },
+      { find: '@trast/core', replacement: src('./packages/core/src/index.ts') },
+      { find: '@trast/match', replacement: src('./packages/match/src/index.ts') },
+      { find: '@trast/vue', replacement: src('./packages/vue/src/index.ts') },
+      { find: '@trast/unplugin', replacement: src('./packages/unplugin/src/index.ts') },
+    ],
   },
   test: {
     include: ['packages/*/{src,test}/**/*.test.ts'],
