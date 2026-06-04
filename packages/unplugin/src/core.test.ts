@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { remove, type RichNode } from '@trast/core'
+import type { RichNode } from '@trast/core'
 import { defineRules, type RuleSetBuilder } from '@trast/match'
+import { vueSplitter } from '@trast/vue'
 import { makeUnpluginOptions } from './core.js'
 import { trast } from './index.js'
 
@@ -14,15 +15,16 @@ const callTransform = (opts: ReturnType<typeof makeUnpluginOptions>, code: strin
 
 let rules: RuleSetBuilder<{ features: string[] }>
 beforeAll(() => {
-  rules = defineRules<{ features: string[] }>((match) => [
-    match.tsx.expr`if (BATI.has($f)) { $$$then } else { $$$otherwise }`.rewrite(
-      ({ f, then, otherwise }, ctx) =>
-        ctx.features.includes((f as RichNode).text.slice(1, -1))
-          ? (then as RichNode[])
-          : (otherwise as RichNode[]),
+  rules = defineRules<{ features: string[] }>((match) =>
+    (['tsx', 'ts'] as const).map((lang) =>
+      match[lang].expr`if (BATI.has($f)) { $$$then } else { $$$otherwise }`.rewrite(
+        ({ f, then, otherwise }, ctx) =>
+          ctx.features.includes((f as RichNode).text.slice(1, -1))
+            ? (then as RichNode[])
+            : (otherwise as RichNode[]),
+      ),
     ),
-    match.tsx.node('debugger_statement').rewrite(() => remove),
-  ])
+  )
 })
 
 describe('makeUnpluginOptions', () => {
@@ -45,6 +47,24 @@ describe('makeUnpluginOptions', () => {
     const opts = makeUnpluginOptions({ rules, context: { features: [] } })
     expect(await callTransform(opts, 'const x = 1', '/app/Page.tsx')).toBeNull() // no rule matched
     expect(await callTransform(opts, 'whatever', '/app/notes.md')).toBeNull() // unhandled ext
+  })
+
+  it('handles a multi-zone format via a splitter (vue)', async () => {
+    const opts = makeUnpluginOptions({
+      rules,
+      context: { features: ['auth'] },
+      splitters: [vueSplitter],
+    })
+    expect(opts.transformInclude!('/app/App.vue')).toBe(true)
+    const sfc = '<script setup lang="ts">\nif (BATI.has("auth")) { a() } else { b() }\n</script>\n'
+    const result = await callTransform(opts, sfc, '/app/App.vue')
+    expect(result?.code).toContain('a()')
+    expect(result?.code).not.toContain('BATI.has')
+  })
+
+  it('does not handle .vue without a configured splitter', () => {
+    const opts = makeUnpluginOptions({ rules, context: { features: [] } })
+    expect(opts.transformInclude!('/app/App.vue')).toBe(false)
   })
 
   it('respects include/exclude filters', () => {

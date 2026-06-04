@@ -21,5 +21,8 @@
     "@trast/match": "workspace:*",
     "unplugin": "^3.0.0",
     "unplugin-utils": "^0.3.0"
+  },
+  "devDependencies": {
+    "@trast/vue": "workspace:*"
   }
 }

@@ -70,6 +70,10 @@ importers:
       unplugin-utils:
         specifier: ^0.3.0
         version: 0.3.1
+    devDependencies:
+      '@trast/vue':
+        specifier: workspace:*
+        version: link:../vue
 
   packages/vue:
     dependencies:
