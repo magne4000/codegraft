@@ -90,16 +90,6 @@ export interface Zone {
   tree: RichNode
 }
 
-/** A single text replacement, expressed in document offsets. */
-export interface Edit {
-  /** Document offset, inclusive. */
-  start: number
-  /** Document offset, exclusive. */
-  end: number
-  /** `''` for a deletion. */
-  replacement: string
-}
-
 /**
  * The object passed as the first argument to every rewrite callback. `node` and the
  * named captures are always `RichNode`/`RichNode[]`; `commentMatch` is present only

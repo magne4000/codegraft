@@ -7,11 +7,11 @@ export type {
   ZoneSplitter,
   RichNode,
   Zone,
-  Edit,
   CaptureArg,
   PatternNode,
   RewriteResult,
   CompiledRule,
+  SourceMap,
   Transformer,
   LazyTransformer,
 } from './types.js'
