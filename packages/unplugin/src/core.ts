@@ -1,5 +1,4 @@
-import { createFilter, type FilterPattern } from 'unplugin-utils'
-import type { UnpluginOptions } from 'unplugin'
+import type { FilterPattern, UnpluginOptions } from 'unplugin'
 import type { GrammarId, Transformer, ZoneSplitter } from '@trast/core'
 import { EXTENSION_GRAMMAR } from '@trast/core/internal'
 import type { RuleSetBuilder } from '@trast/match'
@@ -44,26 +43,27 @@ const cacheKey = (target: GrammarId | ZoneSplitter) => (typeof target === 'strin
 export function makeUnpluginOptions<Ctx extends Record<string, unknown>>(
   options: TrastOptions<Ctx>,
 ): UnpluginOptions {
-  const filter = createFilter(options.include, options.exclude)
   const splitters = options.splitters ?? []
   const cache = new Map<string, Promise<Transformer<Ctx>>>()
 
   return {
     name: '@trast/unplugin',
-    transformInclude(id) {
-      return targetForId(id, splitters) !== undefined && filter(id)
-    },
-    async transform(code, id) {
-      const target = targetForId(id, splitters)
-      if (!target) return null
-      const key = cacheKey(target)
-      let pending = cache.get(key)
-      if (!pending) {
-        pending = options.rules.forTarget(target)
-        cache.set(key, pending)
-      }
-      const result = (await pending).transformWithMap(code, options.context, { source: id })
-      return result.code === code ? null : { code: result.code, map: result.map }
+    transform: {
+      // unplugin's native id filter applies include/exclude; the handler skips any
+      // extension Trast doesn't handle (returning null).
+      filter: { id: { include: options.include, exclude: options.exclude } },
+      async handler(code, id) {
+        const target = targetForId(id, splitters)
+        if (!target) return null
+        const key = cacheKey(target)
+        let pending = cache.get(key)
+        if (!pending) {
+          pending = options.rules.forTarget(target)
+          cache.set(key, pending)
+        }
+        const result = (await pending).transformWithMap(code, options.context, { source: id })
+        return result.code === code ? null : { code: result.code, map: result.map }
+      },
     },
   }
 }
