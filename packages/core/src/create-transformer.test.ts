@@ -9,9 +9,19 @@ function rule(
   language: CompiledRule['language'],
   pattern: PatternNode,
   rewrite: CompiledRule['rewrite'],
-  commentRegex: RegExp | null = null,
+  opts: { guard?: CompiledRule['guard']; commentRegex?: RegExp } = {},
 ): CompiledRule {
-  return { language, pattern, commentRegex, rewrite }
+  return { language, pattern, guard: opts.guard ?? null, commentRegex: opts.commentRegex ?? null, rewrite }
+}
+
+// if ($cond) { $$$body }  — captures the condition and the (no-else) body.
+const IF_PATTERN: PatternNode = {
+  kind: 'exact',
+  nodeType: 'if_statement',
+  children: [
+    { kind: 'exact', nodeType: 'parenthesized_expression', children: [{ kind: 'capture', name: 'cond' }] },
+    { kind: 'exact', nodeType: 'statement_block', children: [{ kind: 'spread', name: 'body' }] },
+  ],
 }
 
 // Stub two-zone splitter (ts + css) — core has no Vue dependency.
@@ -130,9 +140,36 @@ describe('createTransformer', () => {
   it('comment-gated rule fires only on a matching leading comment and consumes it', async () => {
     const t = await createTransformer(
       'typescript',
-      [rule('typescript', { kind: 'node', nodeType: 'lexical_declaration' }, () => remove, /@kill/)],
+      [rule('typescript', { kind: 'node', nodeType: 'lexical_declaration' }, () => remove, { commentRegex: /@kill/ })],
     ).init()
     // only the @kill-tagged declaration (and its comment) is removed
     expect(t.transform('// @kill\nconst x = 1\nconst y = 2', {})).toBe('\nconst y = 2')
+  })
+
+  it('a guard refines the match so a non-matching node is not claimed', async () => {
+    // keep an if's body only when its condition mentions BATI; otherwise do not match
+    const keepIfBati = rule(
+      'typescript',
+      IF_PATTERN,
+      (caps) => caps.body as RichNode[],
+      { guard: (caps) => (caps.cond as RichNode).text.includes('BATI') },
+    )
+    const t = await createTransformer('typescript', [keepIfBati]).init()
+    // the plain `if (other)` is not claimed (recursion continues into it), so the
+    // nested BATI conditional inside it is still found and unwrapped
+    expect(t.transform('if (other) { if (BATI) { x } }', {})).toBe('if (other) { x }')
+  })
+
+  it('recursively transforms a kept branch (nested conditionals collapse)', async () => {
+    const keepIfBati = rule(
+      'typescript',
+      IF_PATTERN,
+      (caps) => caps.body as RichNode[],
+      { guard: (caps) => (caps.cond as RichNode).text.includes('BATI') },
+    )
+    const t = await createTransformer('typescript', [keepIfBati]).init()
+    // both ifs match; the outer keeps its body, which is re-transformed so the inner
+    // collapses too — without recursion this would stay `if (BATI_B) { x }`
+    expect(t.transform('if (BATI_A) { if (BATI_B) { x } }', {})).toBe('x')
   })
 })

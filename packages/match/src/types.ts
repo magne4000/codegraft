@@ -8,6 +8,13 @@ import type { CaptureArg, GrammarId, RewriteResult } from '@trast/core'
 export type Rewrite = (captures: CaptureArg, context: Record<string, unknown>) => RewriteResult
 
 /**
+ * An optional `.where(...)` match guard: a context-free predicate over the captures
+ * that refines the structural match (e.g. "this condition references BATI"). Serialised
+ * like {@link Rewrite}, so it must be self-contained.
+ */
+export type Guard = (captures: CaptureArg) => boolean
+
+/**
  * A rule as captured by the builder at definition time, before any WASM grammar is
  * loaded. `compiledRulesFor` / `forTarget` lower it to a core `CompiledRule` by
  * parsing `patternString` (or deriving `{kind:'node'}` / `{kind:'any'}`) once the
@@ -20,6 +27,8 @@ export interface RawRule {
   patternContext: 'expr' | 'type'
   /** Set by `.node(type)`; `null` otherwise. */
   nodeType: string | null
+  /** Set by `.where(...)`; `null` otherwise. */
+  guard: Guard | null
   commentRegex: RegExp | null
   rewrite: Rewrite
 }

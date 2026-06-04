@@ -40,4 +40,17 @@ describe('EditCollector', () => {
     c.add({ start: 1, end: 4, replacement: '' })
     expect(c.apply('abcde')).toBe('ae')
   })
+
+  it('applyToSpan returns just the transformed slice with in-range edits applied', () => {
+    const c = new EditCollector()
+    c.add({ start: 7, end: 10, replacement: 'X' }) // replaces "789" within span [5,15)
+    // span [5,15) of "0123456789abcde" is "56789abcde"; "789" -> "X" gives "56Xabcde"
+    expect(c.applyToSpan('0123456789abcde', 5, 15)).toBe('56Xabcde')
+  })
+
+  it('apply equals applyToSpan over the whole source', () => {
+    const c = new EditCollector()
+    c.add({ start: 1, end: 4, replacement: 'X' })
+    expect(c.apply('abcde')).toBe(c.applyToSpan('abcde', 0, 'abcde'.length))
+  })
 })

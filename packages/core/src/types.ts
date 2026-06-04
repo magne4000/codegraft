@@ -138,6 +138,14 @@ export type RewriteResult = RichNode | RichNode[] | string | typeof remove
 export interface CompiledRule {
   language: GrammarId | 'any'
   pattern: PatternNode
+  /**
+   * An optional match guard run after the structural match. It refines the match
+   * decision (e.g. "this `if`'s condition references BATI") without enumerating
+   * shapes structurally, so the match stays precise and outer-wins skips only true
+   * matches. Context-free by design — matching does not depend on run context, only
+   * the rewrite does. Serialised like `rewrite`. `null` when the rule has no guard.
+   */
+  guard: ((captures: CaptureArg) => boolean) | null
   commentRegex: RegExp | null
   rewrite: (captures: CaptureArg, context: Record<string, unknown>) => RewriteResult
 }

@@ -21,6 +21,7 @@ import { leadingCommentPredicate, type LeadingCommentMatch } from './comment-pre
 interface RuntimeRule {
   language: GrammarId | 'any'
   visitor: (node: RichNode) => Record<string, RichNode | RichNode[]> | null
+  guard: ((captures: CaptureArg) => boolean) | null
   commentPredicate: ((node: RichNode) => LeadingCommentMatch | null) | null
   rewrite: CompiledRule['rewrite']
 }
@@ -45,6 +46,7 @@ export function createTransformer(
     const runtime: RuntimeRule[] = rules.map((rule) => ({
       language: rule.language,
       visitor: matchVisitor(rule.pattern),
+      guard: rule.guard,
       commentPredicate: rule.commentRegex ? leadingCommentPredicate(rule.commentRegex) : null,
       rewrite: rule.rewrite,
     }))
@@ -84,13 +86,16 @@ function visit(
     const caps = rule.visitor(node)
     if (caps === null) continue
 
+    const captureArg: CaptureArg = { node, ...caps }
+    // Guard refines the structural match (context-free); a miss means this rule does
+    // not claim the node, so recursion continues into its subtree.
+    if (rule.guard && !rule.guard(captureArg)) continue
+
     let cm: LeadingCommentMatch | null = null
     if (rule.commentPredicate) {
       cm = rule.commentPredicate(node)
       if (cm === null) continue
     }
-
-    const captureArg: CaptureArg = { node, ...caps }
     if (cm) captureArg.commentMatch = cm.match
 
     // A comment-gated edit also consumes the directive comment, so it is never
@@ -98,7 +103,7 @@ function visit(
     const start = cm
       ? Math.min(cm.comment.documentStartIndex, node.documentStartIndex)
       : node.documentStartIndex
-    const replacement = resolveResult(rule.rewrite(captureArg, context), source)
+    const replacement = resolveResult(rule.rewrite(captureArg, context), rules, context, source)
     collector.add({ start, end: node.documentEndIndex, replacement })
     return // outer-wins: the first matching rule claims this node; skip its subtree
   }
@@ -108,16 +113,33 @@ function visit(
   }
 }
 
-function resolveResult(result: RewriteResult, source: string): string {
+function resolveResult(
+  result: RewriteResult,
+  rules: RuntimeRule[],
+  context: Record<string, unknown>,
+  source: string,
+): string {
   if (result === remove) return ''
   if (typeof result === 'string') return result
-  if (Array.isArray(result)) {
-    // Re-emit the original source span, never node.text joined: slicing preserves the
-    // whitespace, separators, and comments that live *between* the nodes. Spread
-    // captures are always contiguous, so first.start..last.end is exact.
-    if (result.length === 0) return ''
-    return source.slice(result[0].documentStartIndex, result[result.length - 1].documentEndIndex)
-  }
-  // The only remaining RewriteResult shape is a single RichNode: re-emit its own text.
-  return result.text
+  if (Array.isArray(result)) return result.length === 0 ? '' : transformSpan(result, rules, context, source)
+  return transformSpan([result], rules, context, source)
+}
+
+/**
+ * Re-emit a kept subtree, transformed. The returned nodes re-enter the visitor in a
+ * fresh collector, then their source span is emitted with those nested edits applied —
+ * so a rule (e.g. a nested BATI conditional) inside a kept branch still fires. The
+ * nodes are contiguous (a spread capture guarantees it), and every nested edit lands
+ * within their span, so re-emitting the span is exact: slicing preserves the
+ * whitespace, separators, and comments that live between the nodes.
+ */
+function transformSpan(
+  nodes: RichNode[],
+  rules: RuntimeRule[],
+  context: Record<string, unknown>,
+  source: string,
+): string {
+  const sub = new EditCollector()
+  for (const node of nodes) visit(node, rules, sub, context, source)
+  return sub.applyToSpan(source, nodes[0].documentStartIndex, nodes[nodes.length - 1].documentEndIndex)
 }

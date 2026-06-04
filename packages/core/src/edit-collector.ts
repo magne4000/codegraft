@@ -24,10 +24,20 @@ export class EditCollector {
   }
 
   apply(source: string): string {
-    let result = source
+    return this.applyToSpan(source, 0, source.length)
+  }
+
+  /**
+   * Apply the edits to just the `[start, end)` slice of `source` and return the
+   * transformed slice. Every edit must fall within that range — the recursive
+   * transform of a kept subtree relies on this to re-emit only that subtree, with
+   * its own nested edits baked in.
+   */
+  applyToSpan(source: string, start: number, end: number): string {
+    let text = source.slice(start, end)
     for (const edit of [...this.#edits].reverse()) {
-      result = result.slice(0, edit.start) + edit.replacement + result.slice(edit.end)
+      text = text.slice(0, edit.start - start) + edit.replacement + text.slice(edit.end - start)
     }
-    return result
+    return text
   }
 }
