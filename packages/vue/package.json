@@ -11,7 +11,8 @@
     }
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b",
+    "regen-wasm": "bash scripts/regen-wasm.sh"
   },
   "dependencies": {
     "@trast/core": "workspace:*"

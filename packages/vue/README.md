@@ -18,18 +18,17 @@ const transform = await rules.forTarget(vueSplitter)
 
 ## Vendored grammar wasm
 
-`tree-sitter-vue` ships no prebuilt WebAssembly, so `wasm/tree-sitter-vue.wasm` is
-**vendored** here — extracted from [`tree-sitter-wasms`](https://www.npmjs.com/package/tree-sitter-wasms),
-which builds it from the MIT-licensed [`tree-sitter-vue`](https://github.com/ikatyang/tree-sitter-vue)
-grammar. The package thus owns its grammar with no `tree-sitter-vue` dependency.
+No vue grammar ships a prebuilt WebAssembly, so `wasm/tree-sitter-vue.wasm` is
+**vendored** here — WASI-built from the maintained
+[`tree-sitter-grammars/tree-sitter-vue`](https://github.com/tree-sitter-grammars/tree-sitter-vue)
+(MIT). The package owns its grammar with no `tree-sitter-vue` dependency.
 
-To regenerate the binary from source (the `tree-sitter` CLI uses Docker for the
-emscripten toolchain):
+To regenerate it (WASI via `tree-sitter-cli`'s bundled wasi-sdk — no Docker/emscripten;
+needs network):
 
 ```bash
-# with the tree-sitter-vue grammar checked out / installed
-npx tree-sitter@0.25 build --wasm <path-to-tree-sitter-vue> \
-  --output packages/vue/wasm/tree-sitter-vue.wasm
+pnpm --filter @trast/vue regen-wasm        # or: regen-wasm <git-ref>
 ```
 
-The wasm is verified at load time against the `web-tree-sitter` runtime (grammar ABI 14).
+WASI matters: `web-tree-sitter` ≥ 0.26 only loads WASI-built grammars, and the older
+`tree-sitter-wasms` (emscripten) build is rejected.
