@@ -11,11 +11,14 @@ import { splitAndParse } from './zone-splitter.js'
 import { attachComments } from './comment-attachment.js'
 import { EditCollector } from './edit-collector.js'
 import { evaluate as evaluateNode } from './evaluate.js'
+import { createResolver, type Resolver } from './resolver.js'
 import { assert } from './assert.js'
 
 /** Shared per-transform state a {@link Collection} records edits into. */
 interface Session {
   collector: EditCollector
+  /** The binding resolver for `node`'s zone (JS/TS/TSX), or `null` if unsupported. */
+  resolver(node: RichNode): Resolver | null
 }
 
 /** A field predicate in `find(type, attrs)`: equals a field's text (`string`), matches it
@@ -123,6 +126,23 @@ export class Collection {
   /** Evaluate this node as a build-time expression against `context` (see core `evaluate`). */
   evaluate(context: unknown): unknown {
     return evaluateNode(this.#single(), context)
+  }
+
+  // ---- scope (JS/TS/TSX; confident-or-abstain) ----
+
+  /** Every occurrence (declaration + references) of the binding this node declares, or `null`
+   *  when not confidently resolvable — the safe signal to skip a rename. */
+  references(): Collection | null {
+    const node = this.#single()
+    const refs = this.#session.resolver(node)?.references(node)
+    return refs ? this.#select(refs) : null
+  }
+
+  /** The declaration this reference resolves to, or `null` for a global / when uncertain. */
+  definition(): Collection | null {
+    const node = this.#single()
+    const def = this.#session.resolver(node)?.definition(node)
+    return def ? this.#select([def]) : null
   }
 
   // ---- edits ----
@@ -301,6 +321,13 @@ function dedupe(nodes: RichNode[]): RichNode[] {
   return [...new Set(nodes)]
 }
 
+/** The tree root a node belongs to (its zone's parsed root), for per-zone resolver caching. */
+function rootOf(node: RichNode): RichNode {
+  let cur = node
+  while (cur.parent) cur = cur.parent
+  return cur
+}
+
 /**
  * Build a lazy transformer that runs an imperative `codemod(root, context)` against a target
  * (a grammar or a {@link ZoneSplitter}). Mirrors `createTransformer`: `init()` loads grammars
@@ -330,11 +357,17 @@ export function createCodemodTransformer<Ctx extends Record<string, unknown> = R
       if (namespace !== undefined && !source.includes(namespace)) return collector
       const zones: Zone[] = splitAndParse(source, target)
       for (const zone of zones) attachComments(zone.tree)
-      const root = new Collection(
-        zones.map((zone) => zone.tree),
-        { collector },
-      )
-      codemod(root, context)
+      // One resolver per zone tree, built on first use (only if the codemod asks for scope).
+      const resolvers = new Map<RichNode, Resolver | null>()
+      const session: Session = {
+        collector,
+        resolver(node) {
+          const treeRoot = rootOf(node)
+          if (!resolvers.has(treeRoot)) resolvers.set(treeRoot, createResolver(treeRoot))
+          return resolvers.get(treeRoot) ?? null
+        },
+      }
+      codemod(new Collection(zones.map((zone) => zone.tree), session), context)
       return collector
     }
 
