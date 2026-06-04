@@ -8,6 +8,9 @@
       "path": "./packages/match"
     },
     {
+      "path": "./packages/codemod"
+    },
+    {
       "path": "./packages/vue"
     },
     {

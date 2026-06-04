@@ -1,4 +1,5 @@
 export { createTransformer } from './create-transformer.js'
+export { Collection, createCodemodTransformer } from './collection.js'
 export { evaluate } from './evaluate.js'
 export { getPropertySignatures, getPropertyName, getConditionalBranches } from './helpers.js'
 export { remove } from './types.js'

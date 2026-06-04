@@ -1,0 +1,21 @@
+{
+  "name": "@trast/codemod",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@trast/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@trast/vue": "workspace:*"
+  }
+}

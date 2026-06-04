@@ -27,6 +27,16 @@ importers:
         specifier: workspace:*
         version: link:../match
 
+  packages/codemod:
+    dependencies:
+      '@trast/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@trast/vue':
+        specifier: workspace:*
+        version: link:../vue
+
   packages/core:
     dependencies:
       magic-string:
