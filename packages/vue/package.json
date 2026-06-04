@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
+  "files": ["dist", "wasm"],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -16,10 +17,14 @@
     "@trast/core": "workspace:*"
   },
   "peerDependencies": {
+    "tree-sitter-css": "^0.25.0",
+    "tree-sitter-html": "^0.23.0",
     "tree-sitter-javascript": "^0.25.0",
     "tree-sitter-typescript": "^0.23.0"
   },
   "peerDependenciesMeta": {
+    "tree-sitter-css": { "optional": true },
+    "tree-sitter-html": { "optional": true },
     "tree-sitter-javascript": { "optional": true },
     "tree-sitter-typescript": { "optional": true }
   }

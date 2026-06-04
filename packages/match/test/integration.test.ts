@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import type { GrammarId } from '@trast/core'
+import type { GrammarId, ZoneSplitter } from '@trast/core'
 import type { RuleSetBuilder } from '@trast/match'
+import { vueSplitter } from '@trast/vue'
 import batiRules from './integration/_rules.js'
 import conflictRules from './integration/_conflict-rules.js'
 
@@ -13,7 +14,7 @@ const UPDATE = process.env.UPDATE_FIXTURES === '1'
 
 interface IntegrationCase {
   dir: string
-  target: GrammarId
+  target: GrammarId | ZoneSplitter
   input: string
   rules: RuleSetBuilder<Record<string, unknown>>
   variants: Array<{ name: string; context: Record<string, unknown>; expected: string }>
@@ -104,6 +105,16 @@ const CASES: IntegrationCase[] = [
     rules: batiRules,
     variants: [
       { name: 'comment after last attr is inner, not a gate', context: { features: [] }, expected: 'out.tsx' },
+    ],
+  },
+  {
+    dir: 'vue-sfc',
+    target: vueSplitter,
+    input: 'input.vue',
+    rules: batiRules,
+    variants: [
+      { name: 'transforms the <script> zone, feature on', context: { features: ['auth'] }, expected: 'with.vue' },
+      { name: 'transforms the <script> zone, feature off', context: { features: [] }, expected: 'without.vue' },
     ],
   },
 ]
