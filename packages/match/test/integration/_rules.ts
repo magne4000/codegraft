@@ -1,5 +1,5 @@
 import { defineRules } from '@trast/match'
-import { remove, type RichNode } from '@trast/core'
+import { remove, getConditionalBranches, type RichNode } from '@trast/core'
 
 type Ctx = { features: string[] }
 const feature = (node: unknown) => (node as RichNode).text.slice(1, -1) // "auth" -> auth
@@ -38,4 +38,10 @@ export default defineRules<Ctx>((match) => [
     .node('element')
     .whenLeadingComment(/@bati (\w+)/)
     .rewrite(({ node, commentMatch }, ctx) => (ctx.features.includes(commentMatch![1]) ? node.text : remove)),
+  // BATI.If<{ featureA: T; default: U }>  →  the selected branch's type
+  match.ts.type`BATI.If<$branches>`.rewrite(({ branches }, ctx) => {
+    const choices = getConditionalBranches(branches as RichNode)
+    const chosen = choices.find((c) => ctx.features.includes(c.name)) ?? choices.find((c) => c.name === 'default')
+    return chosen ? chosen.type : 'never'
+  }),
 ])

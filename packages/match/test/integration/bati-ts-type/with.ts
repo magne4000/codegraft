@@ -1,0 +1,1 @@
+type Config = { user: User }

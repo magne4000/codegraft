@@ -108,6 +108,16 @@ const CASES: IntegrationCase[] = [
     ],
   },
   {
+    dir: 'bati-ts-type',
+    target: 'typescript',
+    input: 'input.ts',
+    rules: batiRules,
+    variants: [
+      { name: 'feature on → its branch type', context: { features: ['auth'] }, expected: 'with.ts' },
+      { name: 'feature off → default branch type', context: { features: [] }, expected: 'without.ts' },
+    ],
+  },
+  {
     dir: 'vue-sfc',
     target: vueSplitter,
     input: 'input.vue',
