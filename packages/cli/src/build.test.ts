@@ -17,7 +17,7 @@ beforeEach(async () => {
   await mkdir(outDir, { recursive: true })
 })
 afterAll(async () => {
-  await rm(join(cliDir, '.tmp'), { recursive: true, force: true })
+  await rm(outDir, { recursive: true, force: true })
 })
 
 describe('buildRules', () => {
@@ -38,6 +38,7 @@ describe('buildRules', () => {
 
     const pkg = JSON.parse(await readFile(join(outDir, 'package.json'), 'utf8'))
     expect(pkg.sideEffects).toBe(false)
+    expect(pkg.type).toBe('module') // so Node loads the emitted ESM without a reparse warning
   })
 
   it('reports the grammar packages the targets require', async () => {

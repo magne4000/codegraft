@@ -95,7 +95,7 @@ describe('run (glob + load)', () => {
     await build(join(cliDir, 'test', 'fixtures', 'bati-rules.ts'), distDir)
   })
   afterAll(async () => {
-    await rm(join(cliDir, '.tmp'), { recursive: true, force: true })
+    await rm(distDir, { recursive: true, force: true })
   })
 
   it('globs files, loads the compiled barrel, and applies it in place', async () => {

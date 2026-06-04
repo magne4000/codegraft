@@ -55,7 +55,10 @@ export async function buildRules(
 
   const barrel = stems.map((stem) => `export { transform as ${stem} } from './${stem}.js'`).join('\n')
   await writeFile(join(outputDir, 'index.js'), `${barrel}\n`)
-  await writeFile(join(outputDir, 'package.json'), `${JSON.stringify({ sideEffects: false }, null, 2)}\n`)
+  // type:module so Node loads the emitted ESM without a reparse warning; sideEffects:false
+  // lets bundlers tree-shake the per-target modules a consumer doesn't import.
+  const pkg = { type: 'module', sideEffects: false }
+  await writeFile(join(outputDir, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`)
 
   return {
     files: [...stems.map((s) => `${s}.js`), 'index.js', 'package.json'],
