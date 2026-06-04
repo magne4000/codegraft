@@ -55,6 +55,13 @@ async function loadLanguage(id: string, wasmPath?: string): Promise<Language> {
   return Language.load(readFileSync(path))
 }
 
+/** The npm package that ships a built-in grammar's wasm — the optional peer (§2) a
+ *  consumer must install for that grammar. Derived from the single wasm registry. */
+export function grammarPackage(id: GrammarId): string {
+  const spec = BUILTIN_WASM[id]
+  return spec.slice(0, spec.indexOf('/'))
+}
+
 function resolveBuiltinWasm(id: string): string {
   const spec = BUILTIN_WASM[id as GrammarId]
   assert(spec, `grammar '${id}' is not built in; a ZoneSplitter must pass its own wasmPath to loadGrammar`)
