@@ -44,9 +44,9 @@ describe('buildCodemod (compiled-mode parity)', () => {
     expect(compiled.transform(src, { on: false })).toBe('')
   })
 
-  it('serialises the functional mutation surface (callbacks/mapText/wrap)', async () => {
+  it('serialises the functional mutation surface (callbacks/wrap)', async () => {
     const codemod = defineCodemod((root) => {
-      root.find('number').mapText((n) => String(Number(n) + 1))
+      root.find('number').replaceWith((n) => String(Number(n.text) + 1))
       root.find('call_expression').wrap('(', ')')
       root.find('identifier', { text: 'x' }).replaceWith((id) => id.text.toUpperCase())
     })

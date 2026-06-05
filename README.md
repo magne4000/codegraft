@@ -44,7 +44,7 @@ Declaring the namespace (in `defineCodemod({ namespace: '$$' }, …)`) also enab
 The authoring surface: a jscodeshift-style collection over the CST that records magic-string edits, everything hanging off `root`/`ctx` so a codemod serialises for `trast build`.
 
 - **Query** — `find` (a concrete type or a grammar supertype; field matchers can nest), `filter`, `closest`, `parent`, `children`, `siblings`/`nextSibling`/`prevSibling`, `ancestors`, `closestScope`, `first`/`at`, `isOfType`/`getTypes`.
-- **Edit** — `replaceWith` (a string or `(node) => string`), `mapText`, `setField`, `remove`, `unwrap`, `wrap`, `moveBefore`/`moveAfter`.
+- **Edit** — `replaceWith` (a string or `(node) => string`), `setField`, `remove`, `unwrap`, `wrap`, `moveBefore`/`moveAfter`.
 - **Insert** — `insertBefore`/`insertAfter`, `append`/`prepend`, `ensureImport`; build the text with the grammar-validated `` code`…` ``.
 - **Scope** (JS/TS/TSX, confident-or-abstain) — `references`, `definition`, `lookup`, `bindingsInScope`.
 - **Comments** — `addLeadingComment`/`addTrailingComment`, `removeComments`, `mapLeadingComment`, plus the `directive`/`dropDirective` gates.

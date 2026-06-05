@@ -154,13 +154,6 @@ describe('defineCodemod — functional mutation', () => {
     expect(t.transform('a + b', {})).toBe('A + B')
   })
 
-  it('mapText transforms each node in place', async () => {
-    const t = await defineCodemod((root) => {
-      root.find('number').mapText((n) => String(Number(n) * 2))
-    }).forTarget('tsx')
-    expect(t.transform('const x = 21', {})).toBe('const x = 42')
-  })
-
   it('setField overwrites a field (literal + derived) and no-ops when absent', async () => {
     const value = await defineCodemod((root) => root.find('variable_declarator').setField('value', '2')).forTarget('tsx')
     expect(value.transform('const x = 1', {})).toBe('const x = 2')

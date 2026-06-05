@@ -73,7 +73,7 @@ export class Collection {
     return this.#select(this.#nodes.filter((n) => predicate(new Collection([n], this.#session))))
   }
 
-  /** Nearest ancestor (not self) of node type `type`, per selected node. */
+  /** Nearest ancestor (not self) of `type` — concrete or a grammar supertype — per selected node. */
   closest(type: string): Collection {
     return this.#select(dedupe(this.#nodes.map((n) => ancestorOfType(n, type)).filter(present)))
   }
@@ -224,14 +224,6 @@ export class Collection {
     return this
   }
 
-  /** Replace each node with `fn(its current text)`. */
-  mapText(fn: (text: string) => string): this {
-    for (const node of this.#nodes) {
-      this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, fn(node.text))
-    }
-    return this
-  }
-
   /** Overwrite a field child's text (literal or derived from its current text); no-op where the
    *  field is absent, mirroring `field()` returning an empty selection. */
   setField(name: string, text: string | ((current: string) => string)): this {
@@ -333,12 +325,12 @@ export class Collection {
 
   /** Move this node's text to just before `target` (delete here, re-insert there). */
   moveBefore(target: Collection): this {
-    return this.#move(target, (collector, dest, text) => collector.insertLeft(dest.documentStartIndex, text))
+    return this.#move(target, (dest, text) => this.#session.collector.insertLeft(dest.documentStartIndex, text))
   }
 
   /** Move this node's text to just after `target`. */
   moveAfter(target: Collection): this {
-    return this.#move(target, (collector, dest, text) => collector.insertRight(dest.documentEndIndex, text))
+    return this.#move(target, (dest, text) => this.#session.collector.insertRight(dest.documentEndIndex, text))
   }
 
   // ---- comments ----
@@ -409,7 +401,7 @@ export class Collection {
     return typeof arg === 'function' ? arg(new Collection([node], this.#session)) : arg
   }
   /** Capture this node's text, delete it, and re-insert it at `target` via `place`. */
-  #move(target: Collection, place: (collector: EditCollector, dest: RichNode, text: string) => void): this {
+  #move(target: Collection, place: (dest: RichNode, text: string) => void): this {
     const node = this.#single()
     const dest = target.#single()
     assert(
@@ -418,7 +410,7 @@ export class Collection {
     )
     const text = node.text
     this.#session.collector.remove(node.documentStartIndex, node.documentEndIndex)
-    place(this.#session.collector, dest, text)
+    place(dest, text)
     return this
   }
 
@@ -486,8 +478,9 @@ function isType(node: RichNode, type: string): boolean {
   return node.type === type || Parser.subtypesOf(node.language, type).includes(node.type)
 }
 
+/** Nearest ancestor matching `type` (concrete or supertype), for `closest`. */
 function ancestorOfType(node: RichNode, type: string): RichNode | null {
-  for (let cur = node.parent; cur; cur = cur.parent) if (cur.type === type) return cur
+  for (let cur = node.parent; cur; cur = cur.parent) if (isType(cur, type)) return cur
   return null
 }
 
