@@ -1,5 +1,8 @@
 # Trast
 
+> [!WARNING]
+> **Work in progress.** Trast is pre-1.0 and unstable — the API can change without notice and it isn't battle-tested. Pin exact versions and expect breaking changes.
+
 Structural, build-time code transformation built on [tree-sitter](https://tree-sitter.github.io/) (via `web-tree-sitter`/WASM). You author **codemods** — a jscodeshift-style collection API that finds, navigates, edits, and inserts over the syntax tree — and Trast applies them as precise text edits (with source maps). The motivating use case is collapsing scaffolding conditionals — e.g. [Bati](https://batijs.dev/)'s feature flags — but the engine is general.
 
 ```ts
