@@ -341,7 +341,42 @@ export class Collection {
     return this.#move(target, (collector, dest, text) => collector.insertRight(dest.documentEndIndex, text))
   }
 
-  // ---- comment directives ----
+  // ---- comments ----
+
+  /** Add a leading comment line above each selected node (pass the full comment, e.g. `// note`). */
+  addLeadingComment(text: string): this {
+    for (const node of this.#nodes) this.#session.collector.insertLeft(node.documentStartIndex, text + '\n')
+    return this
+  }
+
+  /** Add a trailing comment after each selected node, on the same line. */
+  addTrailingComment(text: string): this {
+    for (const node of this.#nodes) this.#session.collector.insertRight(node.documentEndIndex, ' ' + text)
+    return this
+  }
+
+  /** Remove each node's comments, keeping the node. Leading comments take the gap up to the node;
+   *  trailing/inner comments are removed by their own range (residual whitespace is Prettier's job —
+   *  note that a same-line trailing comment often attaches as an `inner` comment). */
+  removeComments(): this {
+    for (const node of this.#nodes) {
+      const lead = node.leadingComments
+      if (lead.length) this.#session.collector.remove(lead[0].documentStartIndex, node.documentStartIndex)
+      for (const c of [...node.trailingComments, ...node.innerComments]) {
+        this.#session.collector.remove(c.documentStartIndex, c.documentEndIndex)
+      }
+    }
+    return this
+  }
+
+  /** Rewrite each node's first leading comment with `fn(its text)`; no-op where there is none. */
+  mapLeadingComment(fn: (text: string) => string): this {
+    for (const node of this.#nodes) {
+      const comment = node.leadingComments[0]
+      if (comment) this.#session.collector.overwrite(comment.documentStartIndex, comment.documentEndIndex, fn(comment.text))
+    }
+    return this
+  }
 
   /** The first leading comment matching `pattern`, as a `RegExpMatchArray` (use a capture group
    *  to extract the expression), or `null`. Read it, then `dropDirective` to strip it. */

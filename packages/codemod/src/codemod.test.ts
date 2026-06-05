@@ -286,3 +286,32 @@ describe('defineCodemod — navigation', () => {
     expect(type).toBe('statement_block')
   })
 })
+
+describe('defineCodemod — comments', () => {
+  it('adds a leading / trailing comment', async () => {
+    const lead = await defineCodemod((root) =>
+      root.find('lexical_declaration').addLeadingComment('// note'),
+    ).forTarget('tsx')
+    expect(lead.transform('const x = 1', {})).toBe('// note\nconst x = 1')
+
+    const trail = await defineCodemod((root) =>
+      root.find('lexical_declaration').addTrailingComment('// keep'),
+    ).forTarget('tsx')
+    expect(trail.transform('const x = 1', {})).toBe('const x = 1 // keep')
+  })
+
+  it('removes a node’s comments (leading + inner/trailing), keeping the code', async () => {
+    const t = await defineCodemod((root) => root.find('lexical_declaration').first().removeComments()).forTarget('tsx')
+    const out = t.transform('// a\nconst x = 1 // b\nconst y = 2', {})
+    expect(out).not.toMatch(/\/\/ a|\/\/ b/) // both comments gone (residual spacing left to Prettier)
+    expect(out).toContain('const x = 1')
+    expect(out).toContain('const y = 2')
+  })
+
+  it('rewrites the first leading comment', async () => {
+    const t = await defineCodemod((root) =>
+      root.find('lexical_declaration').mapLeadingComment((c) => c.toUpperCase()),
+    ).forTarget('tsx')
+    expect(t.transform('// note\nconst x = 1', {})).toBe('// NOTE\nconst x = 1')
+  })
+})
