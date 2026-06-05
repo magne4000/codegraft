@@ -145,3 +145,45 @@ describe('defineCodemod — insertion', () => {
     expect(t.transform(out, {})).toBe(out) // idempotent
   })
 })
+
+describe('defineCodemod — functional mutation', () => {
+  it('replaceWith derives the text from each node via a callback', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('identifier').replaceWith((id) => id.text.toUpperCase())
+    }).forTarget('tsx')
+    expect(t.transform('a + b', {})).toBe('A + B')
+  })
+
+  it('mapText transforms each node in place', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('number').mapText((n) => String(Number(n) * 2))
+    }).forTarget('tsx')
+    expect(t.transform('const x = 21', {})).toBe('const x = 42')
+  })
+
+  it('setField overwrites a field (literal + derived) and no-ops when absent', async () => {
+    const value = await defineCodemod((root) => root.find('variable_declarator').setField('value', '2')).forTarget('tsx')
+    expect(value.transform('const x = 1', {})).toBe('const x = 2')
+
+    const name = await defineCodemod((root) =>
+      root.find('variable_declarator').setField('name', (c) => c.toUpperCase()),
+    ).forTarget('tsx')
+    expect(name.transform('const x = 1', {})).toBe('const X = 1')
+
+    const absent = await defineCodemod((root) => root.find('variable_declarator').setField('nope', 'z')).forTarget('tsx')
+    expect(absent.transform('const x = 1', {})).toBe('const x = 1')
+  })
+
+  it('wrap surrounds each node', async () => {
+    const t = await defineCodemod((root) => root.find('call_expression').wrap('(', ')')).forTarget('tsx')
+    expect(t.transform('foo()', {})).toBe('(foo())')
+  })
+
+  it('moveBefore relocates a node (delete here, re-insert there)', async () => {
+    const t = await defineCodemod((root) => {
+      const stmts = root.find('expression_statement')
+      stmts.at(1).moveBefore(stmts.first())
+    }).forTarget('tsx')
+    expect(t.transform('keep();\nmove();', {})).toBe('move();keep();\n')
+  })
+})

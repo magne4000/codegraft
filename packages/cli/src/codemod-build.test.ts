@@ -44,6 +44,24 @@ describe('buildCodemod (compiled-mode parity)', () => {
     expect(compiled.transform(src, { on: false })).toBe('')
   })
 
+  it('serialises the functional mutation surface (callbacks/mapText/wrap)', async () => {
+    const codemod = defineCodemod((root) => {
+      root.find('number').mapText((n) => String(Number(n) + 1))
+      root.find('call_expression').wrap('(', ')')
+      root.find('identifier', { text: 'x' }).replaceWith((id) => id.text.toUpperCase())
+    })
+    // A distinct dir per importing test: Node's ESM loader caches by URL, so reusing tsx.js
+    // would return the prior test's module.
+    const mutDir = join(outDir, 'mut')
+    await buildCodemod(codemod, ['tsx'], mutDir)
+    const compiled = await (await import(pathToFileURL(join(mutDir, 'tsx.js')).href)).transform.init()
+    const dev = await codemod.forTarget('tsx')
+
+    const src = 'const x = 1\nfoo()'
+    expect(compiled.transform(src, {})).toBe(dev.transform(src, {}))
+    expect(compiled.transform(src, {})).toBe('const X = 2\n(foo())')
+  })
+
   it('emitted module imports only @trast/core', async () => {
     const codemod = defineCodemod((root) => root.find('identifier', { text: 'a' }).replaceWith('b'))
     await buildCodemod(codemod, ['tsx'], outDir)

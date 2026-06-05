@@ -26,6 +26,9 @@ interface Session {
  *  `text` matches the node's own text rather than a field. */
 type AttrMatcher = string | RegExp | ((node: RichNode) => boolean)
 
+/** A replacement text, or a function deriving it from the (single-node) Collection being edited. */
+type TextArg = string | ((node: Collection) => string)
+
 /**
  * A jscodeshift-style selection of CST nodes bound to one transform run. Query methods
  * (`find`/`filter`/`closest`/`parent`/`children`/`first`/`at`) return new Collections; edit
@@ -147,9 +150,30 @@ export class Collection {
 
   // ---- edits ----
 
-  replaceWith(text: string): this {
+  /** Replace each selected node with `text`, or with the string a callback derives from it. */
+  replaceWith(text: TextArg): this {
     for (const node of this.#nodes) {
-      this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, text)
+      this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, this.#text(text, node))
+    }
+    return this
+  }
+
+  /** Replace each node with `fn(its current text)`. */
+  mapText(fn: (text: string) => string): this {
+    for (const node of this.#nodes) {
+      this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, fn(node.text))
+    }
+    return this
+  }
+
+  /** Overwrite a field child's text (literal or derived from its current text); no-op where the
+   *  field is absent, mirroring `field()` returning an empty selection. */
+  setField(name: string, text: string | ((current: string) => string)): this {
+    for (const node of this.#nodes) {
+      const field = node.child(name)
+      if (!field) continue
+      const next = typeof text === 'function' ? text(field.text) : text
+      this.#session.collector.overwrite(field.documentStartIndex, field.documentEndIndex, next)
     }
     return this
   }
@@ -182,15 +206,24 @@ export class Collection {
 
   // ---- insertion ----
 
-  /** Insert `text` immediately before each selected node. */
-  insertBefore(text: string): this {
-    for (const node of this.#nodes) this.#session.collector.insertLeft(node.documentStartIndex, text)
+  /** Insert `text` (literal or derived per node) immediately before each selected node. */
+  insertBefore(text: TextArg): this {
+    for (const node of this.#nodes) this.#session.collector.insertLeft(node.documentStartIndex, this.#text(text, node))
     return this
   }
 
-  /** Insert `text` immediately after each selected node. */
-  insertAfter(text: string): this {
-    for (const node of this.#nodes) this.#session.collector.insertRight(node.documentEndIndex, text)
+  /** Insert `text` (literal or derived per node) immediately after each selected node. */
+  insertAfter(text: TextArg): this {
+    for (const node of this.#nodes) this.#session.collector.insertRight(node.documentEndIndex, this.#text(text, node))
+    return this
+  }
+
+  /** Surround each selected node with `before`…`after`. */
+  wrap(before: string, after: string): this {
+    for (const node of this.#nodes) {
+      this.#session.collector.insertLeft(node.documentStartIndex, before)
+      this.#session.collector.insertRight(node.documentEndIndex, after)
+    }
     return this
   }
 
@@ -232,6 +265,16 @@ export class Collection {
     return this
   }
 
+  /** Move this node's text to just before `target` (delete here, re-insert there). */
+  moveBefore(target: Collection): this {
+    return this.#move(target, (collector, dest, text) => collector.insertLeft(dest.documentStartIndex, text))
+  }
+
+  /** Move this node's text to just after `target`. */
+  moveAfter(target: Collection): this {
+    return this.#move(target, (collector, dest, text) => collector.insertRight(dest.documentEndIndex, text))
+  }
+
   // ---- comment directives ----
 
   /** The first leading comment matching `pattern`, as a `RegExpMatchArray` (use a capture group
@@ -260,6 +303,23 @@ export class Collection {
   }
 
   // ---- internals ----
+
+  #text(arg: TextArg, node: RichNode): string {
+    return typeof arg === 'function' ? arg(new Collection([node], this.#session)) : arg
+  }
+  /** Capture this node's text, delete it, and re-insert it at `target` via `place`. */
+  #move(target: Collection, place: (collector: EditCollector, dest: RichNode, text: string) => void): this {
+    const node = this.#single()
+    const dest = target.#single()
+    assert(
+      node.documentEndIndex <= dest.documentStartIndex || dest.documentEndIndex <= node.documentStartIndex,
+      'move source and target overlap',
+    )
+    const text = node.text
+    this.#session.collector.remove(node.documentStartIndex, node.documentEndIndex)
+    place(this.#session.collector, dest, text)
+    return this
+  }
 
   #select(nodes: RichNode[]): Collection {
     return new Collection(nodes, this.#session)
