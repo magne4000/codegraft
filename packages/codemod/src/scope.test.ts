@@ -43,6 +43,19 @@ describe('scope — references() (rename)', () => {
     const t = await rename((r) => r.find('pair_pattern').first().field('value'), 'c').forTarget('tsx')
     expect(t.transform('const { a: b } = obj\nuse(b)', {})).toBe('const { a: c } = obj\nuse(c)')
   })
+
+  it('renames the name of a TS enum and its references', async () => {
+    const t = await rename((r) => r.find('enum_declaration').first().field('name'), 'Hue').forTarget('tsx')
+    expect(t.transform('enum Color { Red, Green }\nconst c = Color.Red', {})).toBe(
+      'enum Hue { Red, Green }\nconst c = Hue.Red',
+    )
+  })
+
+  it('still renames a normal binding in a file that also contains an enum (no blanket abstain)', async () => {
+    const t = await rename(firstDeclName, 'y').forTarget('tsx')
+    const src = 'const x = 1\nenum E { A }\nuse(x, E.A)'
+    expect(t.transform(src, {})).toBe('const y = 1\nenum E { A }\nuse(y, E.A)')
+  })
 })
 
 describe('scope — definition()', () => {

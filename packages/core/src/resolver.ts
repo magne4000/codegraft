@@ -4,9 +4,10 @@ import type { GrammarId, RichNode } from './types.js'
  * Lexical binding resolution for one parsed tree — **JS/TS/TSX only**, syntactic (no types).
  *
  * Confident-or-abstain: a query returns `null` whenever the tree contains a construct the
- * resolver does not fully model (`with`, `eval`, a TS namespace/enum, an unknown binding form,
- * or an occurrence that can't be renamed in place such as an object shorthand). A codemod treats
- * `null` as "do not proceed", so a rename never fires on a guess.
+ * resolver does not fully model (`with`, `eval`, a TS namespace/ambient module, an unknown binding
+ * form, or an occurrence that can't be renamed in place such as an object shorthand). A codemod
+ * treats `null` as "do not proceed", so a rename never fires on a guess. (A TS `enum` is modelled —
+ * its name binds like a class — so it does not force abstention.)
  *
  * Value vs type is mostly free here: tree-sitter spells type references `type_identifier`, so
  * collecting `identifier` nodes naturally excludes them.
@@ -107,11 +108,18 @@ class ScopeResolver implements Resolver {
     if (this.#abstain) return
     switch (node.type) {
       case 'with_statement':
-      case 'internal_module': // TS `namespace X {}`
-      case 'module': // TS `module 'x' {}`
-      case 'enum_declaration':
+      case 'internal_module': // TS `namespace X {}` — exported members are visible as `X.m`, so a
+      case 'module': // TS `module 'x' {}`      partial rename would corrupt; abstain rather than guess.
         this.#abstain = true
         return
+      case 'enum_declaration': {
+        // An enum binds its name in the enclosing scope (like a class). Member names are
+        // `property_identifier` (reached as `E.Member`), never free identifiers, so walking the
+        // body here only resolves initialiser references — it can't mis-bind a member.
+        this.#bind(scope, node.child('name'))
+        this.#walkChildren(node.child('body'), scope, fnScope)
+        return
+      }
       case 'call_expression':
         if (node.child('function')?.text === 'eval') {
           this.#abstain = true
