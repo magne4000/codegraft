@@ -90,6 +90,26 @@ node.field('condition').evaluate(ctx) // e.g. $$.BATI.has("a") && !$$.BATI.has("
 
 A condition that isn't pure over the context (a runtime variable, an unsupported operator) asserts and names the offending node, rather than evaluating wrong.
 
+## Compared to jscodeshift
+
+The collection shape — `find` → navigate → edit — is modelled on [jscodeshift](https://github.com/facebook/jscodeshift), so the API reads familiarly. The engines differ underneath:
+
+| | jscodeshift | Trast |
+|---|---|---|
+| Parser | Babel + recast (AST) | tree-sitter / WASM (CST) |
+| Languages | JS / TS / JSX / TSX / Flow | JS / TS / TSX, HTML, CSS, and SFC zones (`.vue`) |
+| Vocabulary | Babel node types + typed builders (`j.identifier(…)`) | the grammar's own node types and fields; new code is inserted as **text** |
+| Output | recast reprints each changed node from the AST | `magic-string` edits only the touched byte ranges, with **source maps** |
+| Scope / bindings | full `path.scope` analysis (ast-types) | `references()` / `definition()`, **confident-or-abstain** (syntactic, JS/TS/TSX only) |
+| Distribution | one-shot CLI runner | `trast run`, plus **compile-ahead** (`trast build`) and bundler (`@trast/unplugin`) |
+| Ecosystem | large, established corpus of codemods | new |
+
+Where each fits:
+
+- **jscodeshift is stronger** when you need typed AST construction (builders yield structurally valid nodes; Trast inserts raw strings, checked only when re-parsed), type-aware scope analysis, or an existing codemod to reuse.
+- **Trast is stronger** when you need more than the JS family (CSS/HTML/Vue in one tool), byte-exact output with source maps (recast can reflow the subtree it reprints), comment-directive–gated edits, or to ship the transform into a build/bundler step instead of running it once.
+- **The scope models differ by intent.** jscodeshift resolves a binding and leaves the decision to you; Trast returns `null` for any construct it can't model syntactically, so a rename never fires on a guess — fewer renames, but no wrong ones.
+
 ## Using it
 
 **Dev mode** (no build step) — the context is your namespace value, functions and all:
