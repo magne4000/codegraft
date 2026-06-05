@@ -101,14 +101,12 @@ Trast's collection shape — `find` → navigate → edit — is modelled on [js
 | [ts-morph](https://ts-morph.com/) | TypeScript compiler | TS / JS | imperative, typed | compiler reprint | **yes** (full type checker) |
 | [Babel](https://babeljs.io/) plugins | Babel (AST) | JS / TS / JSX | visitor plugins | regenerate (recast optional) | no |
 | [ast-grep](https://ast-grep.github.io/) | tree-sitter (Rust) | many | declarative patterns + YAML rules | pattern fix | no |
-| [Comby](https://comby.dev/) | delimiter/structure-aware | many | match/rewrite templates | template substitution | no |
 
 Picking between them:
 
 - **Type-aware or cross-file refactors** (semantic rename, follow a symbol through the program) → **ts-morph**, which runs the real TypeScript checker. Trast is purely syntactic and single-file; its `references()`/`definition()` **abstain** (return `null`) on anything they can't resolve from the CST alone, so a rename never fires on a guess.
 - **JS-family transforms with an existing corpus to reuse** → **jscodeshift** / **Babel**. Their typed builders construct structurally valid nodes; Trast inserts raw text, checked only when it's re-parsed.
 - **Fast declarative search-lint-rewrite by pattern** → **ast-grep** (or GritQL) — close in spirit to Trast's removed `expr` rules; Trast chose an imperative collection instead, for insertion and navigation that patterns can't express.
-- **Quick language-agnostic surface rewrites** → **Comby**, which needs no per-language grammar (and so can't target node types/fields or resolve scope).
 - **Trast's niche**: real grammars across the JS family *and* HTML/CSS/Vue in one API, byte-exact edits with source maps (recast/Babel reprint the subtree they touch), comment-directive–gated edits, and shipping the transform **into a build step** (`trast build`) or **bundler** (`@trast/unplugin`) rather than running it once.
 
 ## Using it
