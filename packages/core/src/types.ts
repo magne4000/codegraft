@@ -1,4 +1,4 @@
-// The contract every other file in @trast/core (and the @trast/match / @trast/cli
+// The contract every other file in @trast/core (and the @trast/codemod / @trast/cli
 // packages downstream) implements against. No imports: this module is the root of
 // the type graph and must stay dependency-free.
 
@@ -85,63 +85,6 @@ export interface Zone {
   tree: RichNode
 }
 
-/**
- * The first argument to every rewrite: `node` plus the named captures, and
- * `commentMatch` for comment-gated rules. The index signature is widened (rather than
- * intersected) so it admits the `RegExpExecArray` soundly.
- */
-export type CaptureArg = {
-  node: RichNode
-  commentMatch?: RegExpExecArray
-  [capture: string]: RichNode | RichNode[] | RegExpExecArray | undefined
-}
-
-/**
- * The serialisable shape of a pattern. Every rule kind reduces to one of these, so
- * a single matcher covers them all: `match.any()` → `{kind:'any'}`,
- * `match.<lang>.node(t)` → `{kind:'node',nodeType:t}`, and a pattern string compiles
- * to an `exact`/`text` tree.
- */
-export type PatternNode =
-  | { kind: 'exact'; nodeType: string; children: PatternNode[] } // type + recurse children
-  | { kind: 'text'; nodeType: string; text: string } // leaf: type + literal text
-  | { kind: 'node'; nodeType: string } // type only (match.<lang>.node)
-  | { kind: 'capture'; name: string } // $feature
-  | { kind: 'spread'; name: string } // $$$body — must be terminal in its sibling list
-  | { kind: 'any' } // match.any(): any node, no captures
-
-/**
- * The sentinel a rewrite returns to delete the matched node (and, for comment-gated
- * rules, its directive comment). A `unique symbol`, defined once here so there is a
- * single source of truth — it is re-exported as part of the public API.
- */
-export const remove = Symbol('trast.remove')
-
-/** What a rewrite callback may return. */
-export type RewriteResult = RichNode | RichNode[] | string | typeof remove
-
-/**
- * Plain data plus the user's rewrite function — no library-generated closures.
- * `@trast/core` turns `pattern` into a visitor and `commentRegex` into a predicate at
- * `init()`. This is what lets a rule serialise: the only function emitted via
- * `.toString()` is the user-authored `rewrite`; everything else is a `PatternNode`
- * literal and a `RegExp` literal.
- */
-export interface CompiledRule {
-  language: GrammarId | 'any'
-  pattern: PatternNode
-  /**
-   * An optional match guard run after the structural match. It refines the match
-   * decision (e.g. "this `if`'s condition references BATI") without enumerating
-   * shapes structurally, so the match stays precise and outer-wins skips only true
-   * matches. Context-free by design — matching does not depend on run context, only
-   * the rewrite does. Serialised like `rewrite`. `null` when the rule has no guard.
-   */
-  guard: ((captures: CaptureArg) => boolean) | null
-  commentRegex: RegExp | null
-  rewrite: (captures: CaptureArg, context: Record<string, unknown>) => RewriteResult
-}
-
 /** A source map, structurally compatible with magic-string's (kept here so this module
  *  stays import-free). */
 export interface SourceMap {
@@ -156,10 +99,9 @@ export interface SourceMap {
 }
 
 /**
- * Applies a compiled rule set to a source string. Synchronous once built. `Ctx` is the
- * run-context type a rule set is authored against (`defineRules<Ctx>`); it defaults to
- * an open record and is constrained to a record so it can flow to each rewrite. Note
- * that `Ctx` types only the *context* — captures stay dynamic (pattern-dependent).
+ * Applies a codemod to a source string. Synchronous once built. `Ctx` is the run-context
+ * type the codemod is authored against (`defineCodemod<Ctx>`); it defaults to an open record
+ * and is constrained to a record so it can flow into the body and `transform(src, ctx)`.
  */
 export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
   transform(source: string, context: Ctx): string

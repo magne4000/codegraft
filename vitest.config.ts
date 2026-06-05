@@ -12,7 +12,7 @@ export default defineConfig({
     alias: [
       { find: '@trast/core/internal', replacement: src('./packages/core/src/internal.ts') },
       { find: '@trast/core', replacement: src('./packages/core/src/index.ts') },
-      { find: '@trast/match', replacement: src('./packages/match/src/index.ts') },
+      { find: '@trast/codemod', replacement: src('./packages/codemod/src/index.ts') },
       { find: '@trast/vue', replacement: src('./packages/vue/src/index.ts') },
       { find: '@trast/unplugin', replacement: src('./packages/unplugin/src/index.ts') },
     ],

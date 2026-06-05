@@ -20,27 +20,26 @@ Scope of this plan:
 
 ## Status (implemented)
 
-Phases **0–7 are done and green** (169 tests). The codemod API is the primary surface and
-functionally replaces `expr` (incl. multi-zone Vue, compiled mode, and lexical scope):
+Phases **0–8 are done and green** (97 tests after the rules-engine test suites were removed
+with `@trast/match`). The codemod API is the **only** authoring surface (incl. multi-zone Vue,
+compiled mode, and lexical scope):
 
 - ✅ 0–2 Collection query (`find`/`filter`/`closest`/`parent`/`children`/`first`/`at`/`size`/`forEach`/`map`, field predicates, accessors) + `createCodemodTransformer`.
 - ✅ 3 Edits: `replaceWith`/`remove`/`unwrap` (nested collapse) + comment directives.
 - ✅ 4 Insertion: `insertBefore`/`insertAfter`/`append`/`prepend`/`ensureImport`/`prependToFile`.
-- ✅ 5 Scope (JS/TS/TSX): `references()`/`definition()`, confident-or-abstain.
+- ✅ 5 Scope (JS/TS/TSX): `references()`/`definition()`, confident-or-abstain. TS `enum` is modelled
+  (name binds like a class); `with`/`eval`/`namespace`/ambient-`module`/object-shorthand abstain.
 - ✅ 6 Compiled mode: `trast build` for codemods (param-rooted body, parity tests).
 - ✅ 7 Migration: canonical Bati codemod + Vue; `@trast/unplugin` accepts codemods; README leads with the codemod API.
+- ✅ 8 **`@trast/match` retired and deleted.** The package, the core rules runtime
+  (`createTransformer`/pattern-matcher/`CompiledRule`/`remove` sentinel), and the CLI rules path
+  (`buildRules`/`serialiseRules`) are gone. The unplugin option is now `{ codemod }`, not `{ rules }`.
 
-**Phase 8 (retire `@trast/match`'s public surface) is NOT executed** — it deletes a working,
-tested subsystem and is hard to reverse, so it awaits explicit sign-off. `@trast/match` currently
-**coexists** as the declarative alternative.
+**No pattern parser** is shipped or planned (per decision): `findPattern` / `code\`\`` are dropped,
+not deferred — they required the now-deleted pattern parser at runtime.
 
-Deferred / optional (additive, flagged for a decision):
-- `findPattern` (interpreted-only structural templates) — blocked on a core↔match dependency
-  question (the parser lives in `@trast/match`, which depends on core).
-- `code\`\`` validated snippet builder (interpreted-only, needs the parser).
-- The Babel/TS **differential-test harness** for the resolver (it ships with a hand-written
-  case suite instead).
-- `$$.If<>` type-conditional expressed as a codemod (uses `getConditionalBranches`).
+Deferred / optional (additive, still possible):
+- `$$.If<>` type-conditional expressed as a codemod (`getConditionalBranches` is kept in core for it).
 - Cross-file resolution (the `Resolver` interface + file-view `root` keep the door open).
 
 ## 1. Goal & motivation

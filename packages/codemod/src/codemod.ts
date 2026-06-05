@@ -14,10 +14,9 @@ export interface CodemodConfig {
 }
 
 /**
- * Authoring handle for a codemod, parallel to `@trast/match`'s `RuleSetBuilder`. `forTarget`
- * builds an interpreted transformer; `fn`/`namespace` are read by `trast build` for compiled
- * mode. Because the body is param-rooted (everything hangs off `root`/`context`), `fn.toString()`
- * is self-contained and serialises.
+ * Authoring handle for a codemod. `forTarget` builds an interpreted transformer; `fn`/`namespace`
+ * are read by `trast build` for compiled mode. Because the body is param-rooted (everything hangs
+ * off `root`/`context`), `fn.toString()` is self-contained and serialises.
  */
 export class Codemod<Ctx extends Record<string, unknown> = Record<string, unknown>> {
   readonly fn: CodemodFn<Ctx>

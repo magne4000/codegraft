@@ -2,14 +2,14 @@ import type { FilterPattern, UnpluginOptions } from 'unplugin'
 import type { GrammarId, Transformer, ZoneSplitter } from '@trast/core'
 import { EXTENSION_GRAMMAR } from '@trast/core/internal'
 
-/** Anything that builds a transformer for a target — a `defineCodemod` or `defineRules` result. */
+/** Anything that builds a transformer for a target — a `defineCodemod(...)` result. */
 interface TransformerSource<Ctx extends Record<string, unknown>> {
   forTarget(target: GrammarId | ZoneSplitter): Promise<Transformer<Ctx>>
 }
 
 export interface TrastOptions<Ctx extends Record<string, unknown>> {
-  /** A `defineCodemod(...)` or `defineRules(...)` result. */
-  rules: TransformerSource<Ctx>
+  /** A `defineCodemod(...)` result. */
+  codemod: TransformerSource<Ctx>
   /** The run context threaded into every rewrite. */
   context: Ctx
   /**
@@ -62,7 +62,7 @@ export function makeUnpluginOptions<Ctx extends Record<string, unknown>>(
         const key = cacheKey(target)
         let pending = cache.get(key)
         if (!pending) {
-          pending = options.rules.forTarget(target)
+          pending = options.codemod.forTarget(target)
           cache.set(key, pending)
         }
         const result = (await pending).transformWithMap(code, options.context, { source: id })

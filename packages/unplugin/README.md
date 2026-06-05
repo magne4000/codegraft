@@ -7,12 +7,12 @@ Rspack, Farm.
 ```ts
 // vite.config.ts
 import trast from '@trast/unplugin/vite'
-import rules from './bati-rules'
+import codemod from './bati-codemod'
 
 export default {
-  plugins: [trast({ rules, context: { features: ['auth'] } })],
+  plugins: [trast({ codemod, context: { BATI: { has: (f) => f === 'auth' } } })],
 }
 ```
 
-Options: `{ rules, context, splitters?, include?, exclude? }`. Pass `splitters: [vueSplitter]`
+Options: `{ codemod, context, splitters?, include?, exclude? }`. Pass `splitters: [vueSplitter]`
 (from `@trast/vue`) to handle `.vue`. Emits `{ code, map }`.

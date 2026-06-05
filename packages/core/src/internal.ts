@@ -1,7 +1,7 @@
-// Internal primitives for first-party build-time packages (@trast/match's pattern
-// parser). These are NOT part of the public consumer API (§1) — they are exposed only
-// through the "@trast/core/internal" subpath so @trast/match can parse pattern strings
-// with the same Parser/RichNode the runtime uses, without re-initialising web-tree-sitter.
+// Internal primitives for first-party build-time packages (@trast/cli, @trast/vue,
+// @trast/unplugin). These are NOT part of the public consumer API — they are exposed only
+// through the "@trast/core/internal" subpath (e.g. EXTENSION_GRAMMAR for the bundler plugin,
+// grammarPackage for the CLI) so they need not duplicate the Parser/RichNode the runtime uses.
 export { Parser, grammarPackage } from './parser.js'
 export { EXTENSION_GRAMMAR } from './extensions.js'
 export { wrapNode } from './rich-node.js'

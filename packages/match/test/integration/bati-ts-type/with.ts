@@ -1,1 +1,0 @@
-type Config = { user: User }

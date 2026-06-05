@@ -26,9 +26,6 @@ importers:
       '@trast/core':
         specifier: workspace:*
         version: link:../core
-      '@trast/match':
-        specifier: workspace:*
-        version: link:../match
 
   packages/codemod:
     dependencies:
@@ -62,28 +59,18 @@ importers:
         specifier: ^0.23.0
         version: 0.23.2
 
-  packages/match:
-    dependencies:
-      '@trast/core':
-        specifier: workspace:*
-        version: link:../core
-    devDependencies:
-      '@trast/vue':
-        specifier: workspace:*
-        version: link:../vue
-
   packages/unplugin:
     dependencies:
       '@trast/core':
         specifier: workspace:*
         version: link:../core
-      '@trast/match':
-        specifier: workspace:*
-        version: link:../match
       unplugin:
         specifier: ^3.0.0
         version: 3.0.0
     devDependencies:
+      '@trast/codemod':
+        specifier: workspace:*
+        version: link:../codemod
       '@trast/vue':
         specifier: workspace:*
         version: link:../vue

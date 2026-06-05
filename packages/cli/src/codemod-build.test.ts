@@ -50,7 +50,6 @@ describe('buildCodemod (compiled-mode parity)', () => {
     const tsx = await readFile(join(outDir, 'tsx.js'), 'utf8')
     expect(tsx).toContain('createCodemodTransformer')
     expect(tsx).toContain("from '@trast/core'")
-    expect(tsx).not.toContain('@trast/codemod')
-    expect(tsx).not.toContain('@trast/match')
+    expect(tsx).not.toContain('@trast/codemod') // the authoring package never ships to consumers
   })
 })

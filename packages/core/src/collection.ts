@@ -330,9 +330,9 @@ function rootOf(node: RichNode): RichNode {
 
 /**
  * Build a lazy transformer that runs an imperative `codemod(root, context)` against a target
- * (a grammar or a {@link ZoneSplitter}). Mirrors `createTransformer`: `init()` loads grammars
- * once; the returned transformer is synchronous. The codemod receives a {@link Collection} over
- * every zone's tree and records edits, which are emitted via magic-string.
+ * (a grammar or a {@link ZoneSplitter}): `init()` loads grammars once; the returned transformer
+ * is synchronous. The codemod receives a {@link Collection} over every zone's tree and records
+ * edits, which are emitted via magic-string.
  *
  * `namespace` opts into the scan-gate (a source not mentioning it is returned untouched,
  * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form.

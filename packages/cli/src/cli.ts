@@ -7,7 +7,7 @@ import { build } from './build.js'
 import { run, type RunMode } from './run.js'
 
 const USAGE = `usage:
-  trast build <rules-file> --output <dir>
+  trast build <codemod-file> --output <dir>
   trast run <glob...> --transformer <dist/index.js> [--context <json>] [--dry-run | --in-place | --out-dir <dir>]`
 
 /** Dispatch a `trast` invocation. Exported (with an injectable `cwd`) so it is testable
@@ -25,11 +25,11 @@ async function cmdBuild(args: string[], cwd: string): Promise<void> {
     allowPositionals: true,
     options: { output: { type: 'string', short: 'o' } },
   })
-  const [rulesFile] = positionals
-  assert(rulesFile, `trast build: missing <rules-file>\n${USAGE}`)
+  const [codemodFile] = positionals
+  assert(codemodFile, `trast build: missing <codemod-file>\n${USAGE}`)
   const outputDir = resolve(cwd, values.output ?? 'dist')
 
-  const result = await build(resolve(cwd, rulesFile), outputDir)
+  const result = await build(resolve(cwd, codemodFile), outputDir)
   process.stdout.write(`trast build: wrote ${result.files.join(', ')} to ${outputDir}\n`)
   if (result.grammarPackages.length > 0) {
     process.stdout.write(`trast build: targets require ${result.grammarPackages.join(', ')}\n`)

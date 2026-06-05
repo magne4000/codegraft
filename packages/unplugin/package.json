@@ -18,10 +18,10 @@
   },
   "dependencies": {
     "@trast/core": "workspace:*",
-    "@trast/match": "workspace:*",
     "unplugin": "^3.0.0"
   },
   "devDependencies": {
+    "@trast/codemod": "workspace:*",
     "@trast/vue": "workspace:*",
     "rollup": "^4.0.0"
   }

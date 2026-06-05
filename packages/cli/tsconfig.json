@@ -4,7 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./src"
   },
-  "references": [{ "path": "../core" }, { "path": "../match" }, { "path": "../codemod" }],
+  "references": [{ "path": "../core" }, { "path": "../codemod" }],
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"]
 }

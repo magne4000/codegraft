@@ -2,12 +2,11 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { mkdir, rm, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
-import { remove, type RichNode } from '@trast/core'
-import { defineRules } from '@trast/match'
-import { build, buildRules } from './build.js'
+import { defineCodemod } from '@trast/codemod'
+import { build, buildCodemod } from './build.js'
 
 const cliDir = fileURLToPath(new URL('..', import.meta.url))
-const fixture = join(cliDir, 'test', 'fixtures', 'bati-rules.ts')
+const fixture = join(cliDir, 'test', 'fixtures', 'bati-codemod.ts')
 // Write output inside the package (gitignored) so vitest resolves the emitted
 // module's `@trast/core` import via the workspace alias.
 const outDir = join(cliDir, '.tmp', 'build')
@@ -20,17 +19,15 @@ afterAll(async () => {
   await rm(outDir, { recursive: true, force: true })
 })
 
-describe('buildRules', () => {
+describe('buildCodemod', () => {
   it('emits a per-target module, a barrel, and package.json', async () => {
-    const ruleSet = defineRules((match) => [
-      match.tsx.node('debugger_statement').rewrite(() => remove),
-    ])
-    const result = await buildRules(ruleSet, ['tsx'], outDir)
+    const codemod = defineCodemod((root) => root.find('debugger_statement').remove())
+    const result = await buildCodemod(codemod, ['tsx'], outDir)
     expect(result.files).toEqual(['tsx.js', 'index.js', 'package.json'])
 
     const tsx = await readFile(join(outDir, 'tsx.js'), 'utf8')
     expect(tsx).toContain("from '@trast/core'")
-    expect(tsx).not.toContain('@trast/match') // compiled output never imports the builder
+    expect(tsx).not.toContain('@trast/codemod') // compiled output never imports the authoring package
     expect(tsx).not.toContain('@trast/vue')
 
     const barrel = await readFile(join(outDir, 'index.js'), 'utf8')
@@ -42,7 +39,7 @@ describe('buildRules', () => {
   })
 
   it('reports the grammar packages the targets require', async () => {
-    const { grammarPackages } = await buildRules(defineRules(() => []), ['tsx', 'css'], outDir)
+    const { grammarPackages } = await buildCodemod(defineCodemod(() => {}), ['tsx', 'css'], outDir)
     expect(grammarPackages).toEqual(['tree-sitter-css', 'tree-sitter-typescript'])
   })
 })

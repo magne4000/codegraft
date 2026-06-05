@@ -1,12 +1,12 @@
 # @trast/core
 
 Runtime engine for [Trast](../../README.md): the web-tree-sitter parser, the lazy
-`RichNode` wrapper, comment attachment, zone splitting, the pattern matcher, and
-`createTransformer` (which applies compiled rules as `magic-string` edits with source
-maps). Compiled Trast transforms depend only on this package.
+`RichNode` wrapper, comment attachment, zone splitting, the `Collection`, the scope
+`Resolver`, and `createCodemodTransformer` (which runs a codemod as `magic-string` edits
+with source maps). Compiled Trast codemods depend only on this package.
 
 ```ts
-import { createTransformer, remove } from '@trast/core'
+import { Collection, createCodemodTransformer, evaluate } from '@trast/core'
 ```
 
 Grammars (`tree-sitter-javascript|typescript|html|css`) are **optional peer

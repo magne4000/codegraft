@@ -9,7 +9,7 @@ import { wrapNode } from './rich-node.js'
  * its sections. Either way each raw zone is parsed with its grammar and wrapped.
  *
  * Synchronous: grammar loading (and a `ZoneSplitter`'s own `init()`) happen earlier,
- * in `createTransformer.init`, so by the time we get here every grammar is ready.
+ * in the transformer's `init()`, so by the time we get here every grammar is ready.
  */
 export function splitAndParse(source: string, target: GrammarId | ZoneSplitter): Zone[] {
   const rawZones =

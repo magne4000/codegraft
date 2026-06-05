@@ -3,22 +3,24 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createTransformer, type LazyTransformer, type RichNode } from '@trast/core'
-import { defineRules } from '@trast/match'
+import { createCodemodTransformer, type LazyTransformer } from '@trast/core'
+import { defineCodemod } from '@trast/codemod'
 import { build } from './build.js'
 import { runFiles, run } from './run.js'
 
 const IF_ELSE = 'if ($$.flags.auth) { a() } else { b() }'
 const cliDir = fileURLToPath(new URL('..', import.meta.url))
 
-async function tsxTransformers(): Promise<Record<string, LazyTransformer>> {
-  const rules = defineRules<{ flags: Record<string, boolean> }>({ namespace: '$$' }, (match) => [
-    match.tsx.expr`if ($$.flags.$flag) { $$$then } else { $$$otherwise }`.rewrite(
-      ({ flag, then, otherwise }, ctx) =>
-        ctx.flags[(flag as RichNode).text] ? (then as RichNode[]) : (otherwise as RichNode[]),
-    ),
-  ])
-  return { tsx: createTransformer('tsx', await rules.compiledRulesFor('tsx'), rules.namespace) }
+function tsxTransformers(): Record<string, LazyTransformer> {
+  const codemod = defineCodemod<{ flags: Record<string, boolean> }>({ namespace: '$$' }, (root, ctx) => {
+    root.find('if_statement').forEach((node) => {
+      const cond = node.field('condition')
+      if (!cond.text.includes('$$')) return
+      if (cond.evaluate(ctx)) node.unwrap(node.field('consequence').children())
+      else node.unwrap(node.field('alternative').find('statement_block').first().children())
+    })
+  })
+  return { tsx: createCodemodTransformer('tsx', codemod.fn, { namespace: codemod.namespace }) }
 }
 
 async function workdir(): Promise<string> {
@@ -30,8 +32,8 @@ async function workdir(): Promise<string> {
 
 describe('runFiles', () => {
   let transformers: Record<string, LazyTransformer>
-  beforeAll(async () => {
-    transformers = await tsxTransformers()
+  beforeAll(() => {
+    transformers = tsxTransformers()
   })
 
   it('dry-run reports changes but writes nothing; unmatched extensions are skipped', async () => {
@@ -90,7 +92,7 @@ describe('run (glob + load)', () => {
   beforeAll(async () => {
     await rm(distDir, { recursive: true, force: true })
     await mkdir(distDir, { recursive: true })
-    await build(join(cliDir, 'test', 'fixtures', 'bati-rules.ts'), distDir)
+    await build(join(cliDir, 'test', 'fixtures', 'bati-codemod.ts'), distDir)
   })
   afterAll(async () => {
     await rm(distDir, { recursive: true, force: true })

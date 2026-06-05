@@ -3,52 +3,37 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GrammarId, ZoneSplitter } from '@trast/core'
 import { assert, grammarPackage } from '@trast/core/internal'
-import type { RuleSetBuilder } from '@trast/match'
 import type { Codemod } from '@trast/codemod'
-import { serialiseRules, serialiseCodemod } from './serialise.js'
+import { serialiseCodemod } from './serialise.js'
 
 type Target = GrammarId | ZoneSplitter
 
 export interface BuildResult {
   /** File names written under the output dir. */
   files: string[]
-  /** The grammar packages the chosen targets require — the optional peers (§2) the
+  /** The grammar packages the chosen targets require — the optional peers the
    *  shipping tool must add to its own dependencies. */
   grammarPackages: string[]
 }
 
-/** The `default` export (a rule set or a codemod) and `targets` a rules file must provide. */
-interface RulesModule {
-  default: RuleSetBuilder | Codemod
+/** The `default` export (a `defineCodemod` result) and `targets` a codemod file must provide. */
+interface CodemodModule {
+  default: Codemod
   targets: Target[]
 }
 
-const isCodemod = (x: RuleSetBuilder | Codemod): x is Codemod =>
-  typeof (x as Codemod).fn === 'function'
+const isCodemod = (x: unknown): x is Codemod => typeof (x as Codemod | undefined)?.fn === 'function'
 
 /**
- * `trast build`: import a compiled rules/codemod file and emit one transformer module per
- * declared target, a barrel, and a `package.json`. The file must be importable by the running
- * Node (compile TS first, or run under a loader) — §8.
+ * `trast build`: import a codemod file and emit one transformer module per declared target,
+ * a barrel, and a `package.json`. The file must be importable by the running Node (compile TS
+ * first, or run under a loader).
  */
-export async function build(rulesFile: string, outputDir: string): Promise<BuildResult> {
-  const mod = (await import(pathToFileURL(rulesFile).href)) as Partial<RulesModule>
-  assert(mod.default, `rules file '${rulesFile}' has no default export (a defineRules / defineCodemod result)`)
-  assert(Array.isArray(mod.targets), `rules file '${rulesFile}' must export a 'targets' array`)
-  return isCodemod(mod.default)
-    ? buildCodemod(mod.default, mod.targets, outputDir)
-    : buildRules(mod.default, mod.targets, outputDir)
-}
-
-/** Emit the per-target modules + barrel + package.json for an already-loaded rule set. */
-export async function buildRules(
-  ruleSet: RuleSetBuilder,
-  targets: Target[],
-  outputDir: string,
-): Promise<BuildResult> {
-  return emit(targets, outputDir, async (target) =>
-    serialiseRules(target, await ruleSet.compiledRulesFor(target), ruleSet.namespace),
-  )
+export async function build(codemodFile: string, outputDir: string): Promise<BuildResult> {
+  const mod = (await import(pathToFileURL(codemodFile).href)) as Partial<CodemodModule>
+  assert(isCodemod(mod.default), `codemod file '${codemodFile}' has no default export (a defineCodemod result)`)
+  assert(Array.isArray(mod.targets), `codemod file '${codemodFile}' must export a 'targets' array`)
+  return buildCodemod(mod.default, mod.targets, outputDir)
 }
 
 /** Emit the per-target modules + barrel + package.json for an already-loaded codemod. */

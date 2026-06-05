@@ -7,7 +7,7 @@ import { main } from './cli.js'
 
 const IF_ELSE = 'if ($$.flags.auth) { a() } else { b() }'
 const cliDir = fileURLToPath(new URL('..', import.meta.url))
-const fixture = join(cliDir, 'test', 'fixtures', 'bati-rules.ts')
+const fixture = join(cliDir, 'test', 'fixtures', 'bati-codemod.ts')
 const distDir = join(cliDir, '.tmp', 'cli-dist')
 
 const exists = (p: string) =>
@@ -54,7 +54,7 @@ describe('cli main', () => {
   it('rejects an unknown command and missing required args', async () => {
     await expect(main(['frobnicate'], cliDir)).rejects.toThrow(/unknown command/)
     await expect(main(['run', '*.tsx'], cliDir)).rejects.toThrow(/--transformer/)
-    await expect(main(['build'], cliDir)).rejects.toThrow(/rules-file/)
+    await expect(main(['build'], cliDir)).rejects.toThrow(/codemod-file/)
   })
 
   it('rejects more than one run mode', async () => {

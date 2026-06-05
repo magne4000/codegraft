@@ -1,7 +1,7 @@
 # @trast/vue
 
 Vue SFC support for [Trast](../../README.md). `vueSplitter` splits a `.vue` file into
-zones so Trast rules apply per section:
+zones so a Trast codemod applies per section:
 
 | Section | Grammar |
 |---|---|
@@ -12,8 +12,8 @@ zones so Trast rules apply per section:
 ```ts
 import { vueSplitter } from '@trast/vue'
 
-const transform = await rules.forTarget(vueSplitter)
-// or, in @trast/unplugin:  trast({ rules, context, splitters: [vueSplitter] })
+const transform = await codemod.forTarget(vueSplitter)
+// or, in @trast/unplugin:  trast({ codemod, context, splitters: [vueSplitter] })
 ```
 
 ## Vendored grammar wasm
