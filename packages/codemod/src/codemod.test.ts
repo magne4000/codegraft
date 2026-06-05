@@ -244,3 +244,45 @@ describe('defineCodemod — richer querying', () => {
     expect(t.transform('const x = 5', {})).toBe('const x = 0')
   })
 })
+
+describe('defineCodemod — navigation', () => {
+  it('nextSibling / prevSibling / siblings', async () => {
+    const next = await defineCodemod((root) =>
+      root.find('identifier', { text: 'b' }).nextSibling().replaceWith('N'),
+    ).forTarget('tsx')
+    expect(next.transform('const x = [a, b, c]', {})).toBe('const x = [a, b, N]')
+
+    const prev = await defineCodemod((root) =>
+      root.find('identifier', { text: 'b' }).prevSibling().replaceWith('P'),
+    ).forTarget('tsx')
+    expect(prev.transform('const x = [a, b, c]', {})).toBe('const x = [P, b, c]')
+
+    const sibs = await defineCodemod((root) =>
+      root.find('identifier', { text: 'b' }).siblings().replaceWith('X'),
+    ).forTarget('tsx')
+    expect(sibs.transform('const x = [a, b, c]', {})).toBe('const x = [X, b, X]')
+  })
+
+  it('ancestors lists the chain and filters by type', async () => {
+    let types: string[] = []
+    const list = await defineCodemod((root) => {
+      types = root.find('identifier', { text: 'deep' }).ancestors().getTypes()
+    }).forTarget('tsx')
+    list.transform('function f() { return [deep] }', {})
+    expect(types).toEqual(expect.arrayContaining(['array', 'function_declaration', 'program']))
+
+    const filtered = await defineCodemod((root) =>
+      root.find('identifier', { text: 'deep' }).ancestors('function_declaration').replaceWith('FN'),
+    ).forTarget('tsx')
+    expect(filtered.transform('function f() { return deep }', {})).toBe('FN')
+  })
+
+  it('closestScope finds the nearest scope boundary', async () => {
+    let type = ''
+    const t = await defineCodemod((root) => {
+      type = root.find('identifier', { text: 'x' }).first().closestScope().type
+    }).forTarget('tsx')
+    t.transform('function f() { const x = 1 }', {})
+    expect(type).toBe('statement_block')
+  })
+})

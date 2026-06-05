@@ -92,3 +92,31 @@ describe('scope — confident-or-abstain (rename is a no-op)', () => {
     expect(t.transform(src, {})).toBe(src)
   })
 })
+
+describe('scope — lookup / bindingsInScope', () => {
+  it('lookup resolves a name to its declaration from a position', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('call_expression').first().lookup('x')?.replaceWith('FOUND')
+    }).forTarget('tsx')
+    expect(t.transform('const x = 1\nfunction f() { use() }', {})).toBe(
+      'const FOUND = 1\nfunction f() { use() }',
+    )
+  })
+
+  it('bindingsInScope lists visible bindings (inner + outer)', async () => {
+    let names: string[] = []
+    const t = await defineCodemod((root) => {
+      names = root.find('call_expression').first().bindingsInScope()?.map((b) => b.text) ?? []
+    }).forTarget('tsx')
+    t.transform('const a = 1\nfunction f(b) { use() }', {})
+    expect(names).toEqual(expect.arrayContaining(['a', 'b', 'f']))
+  })
+
+  it('lookup abstains inside with', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('call_expression').first().lookup('x')?.replaceWith('FOUND')
+    }).forTarget('tsx')
+    const src = 'const x = 1\nwith (o) { use() }'
+    expect(t.transform(src, {})).toBe(src)
+  })
+})

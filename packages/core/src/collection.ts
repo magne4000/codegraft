@@ -86,6 +86,33 @@ export class Collection {
     return this.#select(this.#nodes.flatMap((n) => n.children))
   }
 
+  /** All named siblings of each selected node (excluding itself). */
+  siblings(): Collection {
+    return this.#select(dedupe(this.#nodes.flatMap((n) => n.parent?.children.filter((c) => c !== n) ?? [])))
+  }
+
+  nextSibling(): Collection {
+    return this.#select(this.#nodes.map((n) => siblingAt(n, 1)).filter(present))
+  }
+
+  prevSibling(): Collection {
+    return this.#select(this.#nodes.map((n) => siblingAt(n, -1)).filter(present))
+  }
+
+  /** Every ancestor of each selected node (innermost first), optionally of node type `type`. */
+  ancestors(type?: string): Collection {
+    const out: RichNode[] = []
+    for (const n of this.#nodes) {
+      for (let cur = n.parent; cur; cur = cur.parent) if (!type || isType(cur, type)) out.push(cur)
+    }
+    return this.#select(dedupe(out))
+  }
+
+  /** Nearest enclosing scope (ancestor-or-self): a function, block, loop, catch, or the program. */
+  closestScope(): Collection {
+    return this.#select(dedupe(this.#nodes.map(scopeOf).filter(present)))
+  }
+
   first(): Collection {
     return this.#select(this.#nodes.slice(0, 1))
   }
@@ -158,6 +185,20 @@ export class Collection {
     const node = this.#single()
     const def = this.#session.resolver(node)?.definition(node)
     return def ? this.#select([def]) : null
+  }
+
+  /** The declaration `name` resolves to from this node's position; `null` for a global / abstain. */
+  lookup(name: string): Collection | null {
+    const node = this.#single()
+    const decl = this.#session.resolver(node)?.lookup(node, name)
+    return decl ? this.#select([decl]) : null
+  }
+
+  /** Every binding visible at this node (inner shadows outer), or `null` when abstaining. */
+  bindingsInScope(): Collection | null {
+    const node = this.#single()
+    const bindings = this.#session.resolver(node)?.bindingsInScope(node)
+    return bindings ? this.#select(bindings) : null
   }
 
   // ---- construction ----
@@ -412,6 +453,32 @@ function isType(node: RichNode, type: string): boolean {
 
 function ancestorOfType(node: RichNode, type: string): RichNode | null {
   for (let cur = node.parent; cur; cur = cur.parent) if (cur.type === type) return cur
+  return null
+}
+
+/** The named sibling `delta` positions from `node`, or `null` past either end. */
+function siblingAt(node: RichNode, delta: number): RichNode | null {
+  const siblings = node.parent?.children
+  const i = siblings?.indexOf(node) ?? -1
+  return i === -1 ? null : (siblings![i + delta] ?? null)
+}
+
+// JS/TS scope boundaries — the structural notion behind `closestScope` (no resolver needed).
+const SCOPE_NODES = new Set([
+  'program',
+  'statement_block',
+  'function_declaration',
+  'generator_function_declaration',
+  'function_expression',
+  'generator_function',
+  'arrow_function',
+  'method_definition',
+  'for_statement',
+  'for_in_statement',
+  'catch_clause',
+])
+function scopeOf(node: RichNode): RichNode | null {
+  for (let cur: RichNode | null = node; cur; cur = cur.parent) if (SCOPE_NODES.has(cur.type)) return cur
   return null
 }
 

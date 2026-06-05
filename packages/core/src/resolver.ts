@@ -18,6 +18,10 @@ export interface Resolver {
   references(decl: RichNode): RichNode[] | null
   /** The declaration a value reference resolves to; `null` for a global or to abstain. */
   definition(ref: RichNode): RichNode | null
+  /** The declaration `name` resolves to from `at`'s position; `null` for a global or to abstain. */
+  lookup(at: RichNode, name: string): RichNode | null
+  /** Every binding visible at `at` (inner shadows outer), or `null` to abstain. */
+  bindingsInScope(at: RichNode): RichNode[] | null
 }
 
 const SUPPORTED = new Set<GrammarId>(['javascript', 'typescript', 'tsx'])
@@ -48,7 +52,7 @@ class ScopeResolver implements Resolver {
 
   definition(ref: RichNode): RichNode | null {
     if (this.#abstain || ref.type !== 'identifier') return null
-    return this.#resolve(ref)
+    return this.lookup(ref, ref.text)
   }
 
   references(decl: RichNode): RichNode[] | null {
@@ -61,11 +65,11 @@ class ScopeResolver implements Resolver {
       if (abstain) return
       if (node.text === name) {
         // an object shorthand referencing this binding can't be renamed in place
-        if (node.type === 'shorthand_property_identifier' && this.#resolve(node) === decl) {
+        if (node.type === 'shorthand_property_identifier' && this.lookup(node, name) === decl) {
           abstain = true
           return
         }
-        if (node.type === 'identifier' && this.#resolve(node) === decl) out.push(node)
+        if (node.type === 'identifier' && this.lookup(node, name) === decl) out.push(node)
       }
       for (const child of node.allChildren) collect(child)
     }
@@ -73,12 +77,22 @@ class ScopeResolver implements Resolver {
     return abstain ? null : out
   }
 
-  #resolve(ref: RichNode): RichNode | null {
-    for (let s: Scope | null = this.#scopeAt(ref); s; s = s.parent) {
-      const binding = s.bindings.get(ref.text)
+  lookup(at: RichNode, name: string): RichNode | null {
+    if (this.#abstain) return null
+    for (let s: Scope | null = this.#scopeAt(at); s; s = s.parent) {
+      const binding = s.bindings.get(name)
       if (binding) return binding
     }
     return null
+  }
+
+  bindingsInScope(at: RichNode): RichNode[] | null {
+    if (this.#abstain) return null
+    const visible = new Map<string, RichNode>()
+    for (let s: Scope | null = this.#scopeAt(at); s; s = s.parent) {
+      for (const [name, decl] of s.bindings) if (!visible.has(name)) visible.set(name, decl) // inner shadows outer
+    }
+    return [...visible.values()]
   }
 
   #scopeAt(node: RichNode): Scope {
