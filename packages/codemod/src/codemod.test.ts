@@ -224,12 +224,10 @@ describe('defineCodemod — richer querying', () => {
   })
 
   it('expands a grammar supertype to its concrete subtypes (transitively)', async () => {
-    // Supertype metadata requires an ABI-15 grammar; the bundled `javascript` wasm has it (the
-    // `typescript` one is still ABI 14, where supertypes are absent and `find` falls back to exact).
     let kinds: string[] = []
     const t = await defineCodemod((root) => {
       kinds = root.find('statement').getTypes()
-    }).forTarget('javascript')
+    }).forTarget('tsx')
     t.transform('const a = 1\nif (x) {}\nfoo()', {})
     expect(kinds).toContain('lexical_declaration') // reached transitively via `declaration`
     expect(kinds).toContain('if_statement')

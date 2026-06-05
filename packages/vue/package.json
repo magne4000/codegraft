@@ -20,13 +20,11 @@
   "peerDependencies": {
     "tree-sitter-css": "^0.25.0",
     "tree-sitter-html": "^0.23.0",
-    "tree-sitter-javascript": "^0.25.0",
-    "tree-sitter-typescript": "^0.23.0"
+    "tree-sitter-javascript": "^0.25.0"
   },
   "peerDependenciesMeta": {
     "tree-sitter-css": { "optional": true },
     "tree-sitter-html": { "optional": true },
-    "tree-sitter-javascript": { "optional": true },
-    "tree-sitter-typescript": { "optional": true }
+    "tree-sitter-javascript": { "optional": true }
   }
 }

@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { Language, Parser as TreeSitter } from 'web-tree-sitter'
 import type { Tree } from 'web-tree-sitter'
 import type { GrammarId } from './types.js'
@@ -10,15 +11,23 @@ import { assert } from './assert.js'
 const require = createRequire(import.meta.url)
 
 /**
- * The npm specifier of each built-in grammar's `.wasm`. `tree-sitter-typescript`
- * ships both the `typescript` and `tsx` grammars. These packages are optional peer
- * dependencies (§2): the specifier is only resolved when a grammar is actually
- * requested, and a missing package becomes an actionable error in `resolveBuiltinWasm`.
+ * The typescript/tsx grammars are **vendored** here (resolved relative to this module): the npm
+ * `tree-sitter-typescript` ships an ABI-14 wasm, which web-tree-sitter loads without supertype
+ * metadata (so `find` can't expand `expression` etc.). We ship an ABI-15 rebuild — see
+ * `scripts/regen-ts-wasm.sh` — so they impose no peer dependency.
  */
-const BUILTIN_WASM: Record<GrammarId, string> = {
+const VENDORED_WASM: Partial<Record<GrammarId, string>> = {
+  typescript: 'tree-sitter-typescript.wasm',
+  tsx: 'tree-sitter-tsx.wasm',
+}
+
+/**
+ * The npm specifier of each remaining built-in grammar's `.wasm` (these already ship the ABI we
+ * need). Optional peer dependencies: resolved only when the grammar is requested, and a missing
+ * package becomes an actionable error in `resolveBuiltinWasm`.
+ */
+const PEER_WASM: Partial<Record<GrammarId, string>> = {
   javascript: 'tree-sitter-javascript/tree-sitter-javascript.wasm',
-  typescript: 'tree-sitter-typescript/tree-sitter-typescript.wasm',
-  tsx: 'tree-sitter-typescript/tree-sitter-tsx.wasm',
   html: 'tree-sitter-html/tree-sitter-html.wasm',
   css: 'tree-sitter-css/tree-sitter-css.wasm',
 }
@@ -56,15 +65,17 @@ async function loadLanguage(id: string, wasmPath?: string): Promise<Language> {
   return Language.load(readFileSync(path))
 }
 
-/** The npm package that ships a built-in grammar's wasm — the optional peer (§2) a
- *  consumer must install for that grammar. Derived from the single wasm registry. */
-export function grammarPackage(id: GrammarId): string {
-  const spec = BUILTIN_WASM[id]
-  return spec.slice(0, spec.indexOf('/'))
+/** The npm package a consumer must install for a built-in grammar, or `null` for a vendored
+ *  grammar that ships with `@trast/core`. */
+export function grammarPackage(id: GrammarId): string | null {
+  const spec = PEER_WASM[id]
+  return spec ? spec.slice(0, spec.indexOf('/')) : null
 }
 
 function resolveBuiltinWasm(id: string): string {
-  const spec = BUILTIN_WASM[id as GrammarId]
+  const vendored = VENDORED_WASM[id as GrammarId]
+  if (vendored) return fileURLToPath(new URL(`../wasm/${vendored}`, import.meta.url))
+  const spec = PEER_WASM[id as GrammarId]
   assert(spec, `grammar '${id}' is not built in; a ZoneSplitter must pass its own wasmPath to loadGrammar`)
   try {
     return require.resolve(spec)

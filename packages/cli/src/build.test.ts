@@ -38,9 +38,9 @@ describe('buildCodemod', () => {
     expect(pkg.type).toBe('module') // so Node loads the emitted ESM without a reparse warning
   })
 
-  it('reports the grammar packages the targets require', async () => {
+  it('reports the grammar packages the targets require (vendored tsx imposes no peer)', async () => {
     const { grammarPackages } = await buildCodemod(defineCodemod(() => {}), ['tsx', 'css'], outDir)
-    expect(grammarPackages).toEqual(['tree-sitter-css', 'tree-sitter-typescript'])
+    expect(grammarPackages).toEqual(['tree-sitter-css'])
   })
 })
 

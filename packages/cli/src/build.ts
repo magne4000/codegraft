@@ -67,5 +67,7 @@ function grammarPackagesFor(targets: Target[]): string[] {
     if (typeof target === 'string') grammars.add(target)
     else for (const g of target.grammars) grammars.add(g)
   }
-  return [...new Set([...grammars].map(grammarPackage))].sort()
+  // null = a vendored grammar (ships with @trast/core), so it needs no peer.
+  const packages = [...grammars].map(grammarPackage).filter((p): p is string => p !== null)
+  return [...new Set(packages)].sort()
 }
