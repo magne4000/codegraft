@@ -214,3 +214,33 @@ describe('defineCodemod — code builder', () => {
     expect(() => t.transform('const x = [a]', {})).toThrow(/invalid tsx snippet/)
   })
 })
+
+describe('defineCodemod — richer querying', () => {
+  it('matches a nested field path', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('call_expression', { function: { object: 'foo' } }).replaceWith('X')
+    }).forTarget('tsx')
+    expect(t.transform('foo.bar()\nbaz.bar()', {})).toBe('X\nbaz.bar()')
+  })
+
+  it('expands a grammar supertype to its concrete subtypes (transitively)', async () => {
+    // Supertype metadata requires an ABI-15 grammar; the bundled `javascript` wasm has it (the
+    // `typescript` one is still ABI 14, where supertypes are absent and `find` falls back to exact).
+    let kinds: string[] = []
+    const t = await defineCodemod((root) => {
+      kinds = root.find('statement').getTypes()
+    }).forTarget('javascript')
+    t.transform('const a = 1\nif (x) {}\nfoo()', {})
+    expect(kinds).toContain('lexical_declaration') // reached transitively via `declaration`
+    expect(kinds).toContain('if_statement')
+    expect(kinds).toContain('expression_statement')
+  })
+
+  it('isOfType gates an edit', async () => {
+    const t = await defineCodemod((root) => {
+      const nums = root.find('number')
+      if (nums.isOfType('number')) nums.replaceWith('0')
+    }).forTarget('tsx')
+    expect(t.transform('const x = 5', {})).toBe('const x = 0')
+  })
+})

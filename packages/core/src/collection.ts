@@ -22,9 +22,10 @@ interface Session {
 }
 
 /** A field predicate in `find(type, attrs)`: equals a field's text (`string`), matches it
- *  (`RegExp`), or an escape-hatch predicate over the whole node (`function`). The pseudo-key
- *  `text` matches the node's own text rather than a field. */
-type AttrMatcher = string | RegExp | ((node: RichNode) => boolean)
+ *  (`RegExp`), recurses into the field child (a nested `{ … }` of more matchers), or is an
+ *  escape-hatch predicate over the whole node (`function`). The pseudo-key `text` matches the
+ *  node's own text rather than a field. */
+type AttrMatcher = string | RegExp | ((node: RichNode) => boolean) | { [field: string]: AttrMatcher }
 
 /** A replacement text, or a function deriving it from the (single-node) Collection being edited. */
 type TextArg = string | ((node: Collection) => string)
@@ -50,13 +51,14 @@ export class Collection {
 
   // ---- query ----
 
-  /** Descendants (not self) of node type `type`, optionally filtered by field predicates. */
+  /** Descendants (not self) of node type `type` — a concrete type or a grammar supertype
+   *  (e.g. `expression`), optionally filtered by field predicates. */
   find(type: string, attrs?: Record<string, AttrMatcher>): Collection {
     const out: RichNode[] = []
     const seen = new Set<RichNode>()
     const walk = (node: RichNode): void => {
       for (const child of node.children) {
-        if (child.type === type && !seen.has(child) && matches(child, attrs)) {
+        if (isType(child, type) && !seen.has(child) && matches(child, attrs)) {
           seen.add(child)
           out.push(child)
         }
@@ -108,6 +110,16 @@ export class Collection {
 
   nodes(): RichNode[] {
     return [...this.#nodes]
+  }
+
+  /** Whether every selected node is of `type` (concrete or supertype); false for an empty selection. */
+  isOfType(type: string): boolean {
+    return this.#nodes.length > 0 && this.#nodes.every((n) => isType(n, type))
+  }
+
+  /** The distinct node types in the selection. */
+  getTypes(): string[] {
+    return [...new Set(this.#nodes.map((n) => n.type))]
   }
 
   // ---- single-node accessors (assert exactly one) ----
@@ -377,12 +389,25 @@ function matches(node: RichNode, attrs?: Record<string, AttrMatcher>): boolean {
   for (const [key, matcher] of Object.entries(attrs)) {
     if (typeof matcher === 'function') {
       if (!matcher(node)) return false
-      continue
+    } else if (matcher instanceof RegExp) {
+      if (!matcher.test(fieldText(node, key))) return false
+    } else if (typeof matcher === 'object') {
+      const child = node.child(key) // nested: descend into the field child
+      if (!child || !matches(child, matcher)) return false
+    } else if (fieldText(node, key) !== matcher) {
+      return false
     }
-    const text = key === 'text' ? node.text : (node.child(key)?.text ?? '')
-    if (matcher instanceof RegExp ? !matcher.test(text) : text !== matcher) return false
   }
   return true
+}
+
+function fieldText(node: RichNode, key: string): string {
+  return key === 'text' ? node.text : (node.child(key)?.text ?? '')
+}
+
+/** Match a node by concrete type or by a grammar supertype (e.g. `expression`). */
+function isType(node: RichNode, type: string): boolean {
+  return node.type === type || Parser.subtypesOf(node.language, type).includes(node.type)
 }
 
 function ancestorOfType(node: RichNode, type: string): RichNode | null {

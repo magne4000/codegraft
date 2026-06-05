@@ -27,6 +27,7 @@ let initPromise: Promise<void> | null = null
 let parser: TreeSitter | null = null
 const languages = new Map<string, Language>()
 const loads = new Map<string, Promise<Language>>()
+const subtypeCache = new Map<string, Map<string, string[]>>()
 
 /** Idempotent. Loads the web-tree-sitter WASM runtime once per process. */
 async function init(): Promise<void> {
@@ -85,5 +86,33 @@ function parse(source: string, id: GrammarId | string): Tree {
   return tree
 }
 
+/** The subtypes of a grammar supertype, expanded transitively (`statement` → `declaration` →
+ *  `lexical_declaration`, …), or `[]` if `typeName` is not a supertype. Intermediate supertype
+ *  names are kept too — harmless, since only concrete types appear in a tree. Memoised per grammar,
+ *  so a `find` can call it per node. */
+function subtypesOf(id: GrammarId | string, typeName: string): string[] {
+  const language = languages.get(id)
+  assert(language, `grammar '${id}' not loaded; call loadGrammar('${id}') first`)
+  let perGrammar = subtypeCache.get(id)
+  if (!perGrammar) subtypeCache.set(id, (perGrammar = new Map()))
+  let names = perGrammar.get(typeName)
+  if (!names) {
+    const supertypes = new Set(language.supertypes)
+    const root = language.idForNodeType(typeName, true)
+    const out = new Set<string>()
+    const queue = root !== null && supertypes.has(root) ? [root] : []
+    for (let sym = queue.pop(); sym !== undefined; sym = queue.pop()) {
+      for (const sub of language.subtypes(sym)) {
+        const name = language.nodeTypeForId(sub)
+        if (!name || out.has(name)) continue
+        out.add(name)
+        if (supertypes.has(sub)) queue.push(sub) // nested supertype — expand to its leaves
+      }
+    }
+    perGrammar.set(typeName, (names = [...out]))
+  }
+  return names
+}
+
 /** Singleton confining every web-tree-sitter init/load concern to this module. */
-export const Parser = { init, loadGrammar, parse }
+export const Parser = { init, loadGrammar, parse, subtypesOf }
