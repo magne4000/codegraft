@@ -90,25 +90,26 @@ node.field('condition').evaluate(ctx) // e.g. $$.BATI.has("a") && !$$.BATI.has("
 
 A condition that isn't pure over the context (a runtime variable, an unsupported operator) asserts and names the offending node, rather than evaluating wrong.
 
-## Compared to jscodeshift
+## Compared to other tools
 
-The collection shape — `find` → navigate → edit — is modelled on [jscodeshift](https://github.com/facebook/jscodeshift), so the API reads familiarly. The engines differ underneath:
+Trast's collection shape — `find` → navigate → edit — is modelled on [jscodeshift](https://github.com/facebook/jscodeshift), so that API reads familiarly. Across the wider landscape the engines differ on a few axes:
 
-| | jscodeshift | Trast |
-|---|---|---|
-| Parser | Babel + recast (AST) | tree-sitter / WASM (CST) |
-| Languages | JS / TS / JSX / TSX / Flow | JS / TS / TSX, HTML, CSS, and SFC zones (`.vue`) |
-| Vocabulary | Babel node types + typed builders (`j.identifier(…)`) | the grammar's own node types and fields; new code is inserted as **text** |
-| Output | recast reprints each changed node from the AST | `magic-string` edits only the touched byte ranges, with **source maps** |
-| Scope / bindings | full `path.scope` analysis (ast-types) | `references()` / `definition()`, **confident-or-abstain** (syntactic, JS/TS/TSX only) |
-| Distribution | one-shot CLI runner | `trast run`, plus **compile-ahead** (`trast build`) and bundler (`@trast/unplugin`) |
-| Ecosystem | large, established corpus of codemods | new |
+| Tool | Foundation | Languages | Authoring | Output | Type-aware |
+|---|---|---|---|---|---|
+| **Trast** | tree-sitter (CST) | JS / TS / TSX, HTML, CSS, `.vue` | imperative collection | byte-range edits + source maps | no (syntactic) |
+| [jscodeshift](https://github.com/facebook/jscodeshift) | Babel + recast (AST) | JS / TS / JSX / Flow | imperative collection + typed builders | recast reprint | no |
+| [ts-morph](https://ts-morph.com/) | TypeScript compiler | TS / JS | imperative, typed | compiler reprint | **yes** (full type checker) |
+| [Babel](https://babeljs.io/) plugins | Babel (AST) | JS / TS / JSX | visitor plugins | regenerate (recast optional) | no |
+| [ast-grep](https://ast-grep.github.io/) | tree-sitter (Rust) | many | declarative patterns + YAML rules | pattern fix | no |
+| [Comby](https://comby.dev/) | delimiter/structure-aware | many | match/rewrite templates | template substitution | no |
 
-Where each fits:
+Picking between them:
 
-- **jscodeshift is stronger** when you need typed AST construction (builders yield structurally valid nodes; Trast inserts raw strings, checked only when re-parsed), type-aware scope analysis, or an existing codemod to reuse.
-- **Trast is stronger** when you need more than the JS family (CSS/HTML/Vue in one tool), byte-exact output with source maps (recast can reflow the subtree it reprints), comment-directive–gated edits, or to ship the transform into a build/bundler step instead of running it once.
-- **The scope models differ by intent.** jscodeshift resolves a binding and leaves the decision to you; Trast returns `null` for any construct it can't model syntactically, so a rename never fires on a guess — fewer renames, but no wrong ones.
+- **Type-aware or cross-file refactors** (semantic rename, follow a symbol through the program) → **ts-morph**, which runs the real TypeScript checker. Trast is purely syntactic and single-file; its `references()`/`definition()` **abstain** (return `null`) on anything they can't resolve from the CST alone, so a rename never fires on a guess.
+- **JS-family transforms with an existing corpus to reuse** → **jscodeshift** / **Babel**. Their typed builders construct structurally valid nodes; Trast inserts raw text, checked only when it's re-parsed.
+- **Fast declarative search-lint-rewrite by pattern** → **ast-grep** (or GritQL) — close in spirit to Trast's removed `expr` rules; Trast chose an imperative collection instead, for insertion and navigation that patterns can't express.
+- **Quick language-agnostic surface rewrites** → **Comby**, which needs no per-language grammar (and so can't target node types/fields or resolve scope).
+- **Trast's niche**: real grammars across the JS family *and* HTML/CSS/Vue in one API, byte-exact edits with source maps (recast/Babel reprint the subtree they touch), comment-directive–gated edits, and shipping the transform **into a build step** (`trast build`) or **bundler** (`@trast/unplugin`) rather than running it once.
 
 ## Using it
 
