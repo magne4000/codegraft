@@ -221,11 +221,8 @@ export class Collection {
     const source = importSource(statement)
     const imports = this.find('import_statement').#nodes
     if (imports.some((imp) => importSource(imp.text) === source)) return this
-    if (imports.length > 0) {
-      this.#session.collector.insertRight(imports[imports.length - 1].documentEndIndex, '\n' + statement)
-    } else {
-      this.#session.collector.insertLeft(this.#firstNode().documentStartIndex, statement + '\n')
-    }
+    if (imports.length === 0) return this.prependToFile(statement + '\n')
+    this.#session.collector.insertRight(imports[imports.length - 1].documentEndIndex, '\n' + statement)
     return this
   }
 

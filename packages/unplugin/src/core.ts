@@ -2,7 +2,7 @@ import type { FilterPattern, UnpluginOptions } from 'unplugin'
 import type { GrammarId, Transformer, ZoneSplitter } from '@trast/core'
 import { EXTENSION_GRAMMAR } from '@trast/core/internal'
 
-/** Anything that builds a transformer for a target — a `defineCodemod(...)` result. */
+/** A codemod by shape — so the plugin needn't depend on `@trast/codemod` just for a type. */
 interface TransformerSource<Ctx extends Record<string, unknown>> {
   forTarget(target: GrammarId | ZoneSplitter): Promise<Transformer<Ctx>>
 }

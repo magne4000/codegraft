@@ -31,33 +31,20 @@ const isCodemod = (x: unknown): x is Codemod => typeof (x as Codemod | undefined
  */
 export async function build(codemodFile: string, outputDir: string): Promise<BuildResult> {
   const mod = (await import(pathToFileURL(codemodFile).href)) as Partial<CodemodModule>
-  assert(isCodemod(mod.default), `codemod file '${codemodFile}' has no default export (a defineCodemod result)`)
+  assert(isCodemod(mod.default), `codemod file '${codemodFile}' must default-export a defineCodemod result`)
   assert(Array.isArray(mod.targets), `codemod file '${codemodFile}' must export a 'targets' array`)
   return buildCodemod(mod.default, mod.targets, outputDir)
 }
 
-/** Emit the per-target modules + barrel + package.json for an already-loaded codemod. */
-export async function buildCodemod(
-  codemod: Codemod,
-  targets: Target[],
-  outputDir: string,
-): Promise<BuildResult> {
-  const body = codemod.fn.toString()
-  return emit(targets, outputDir, (target) => serialiseCodemod(target, body, codemod.namespace))
-}
-
-/** Shared emit: one module per target, a barrel, and a package.json. */
-async function emit(
-  targets: Target[],
-  outputDir: string,
-  sourceFor: (target: Target) => string | Promise<string>,
-): Promise<BuildResult> {
+/** Emit one transformer module per target, a barrel, and a `package.json` for a loaded codemod. */
+export async function buildCodemod(codemod: Codemod, targets: Target[], outputDir: string): Promise<BuildResult> {
   await mkdir(outputDir, { recursive: true })
+  const body = codemod.fn.toString()
 
   const stems: string[] = []
   for (const target of targets) {
     const stem = typeof target === 'string' ? target : target.id
-    await writeFile(join(outputDir, `${stem}.js`), await sourceFor(target))
+    await writeFile(join(outputDir, `${stem}.js`), serialiseCodemod(target, body, codemod.namespace))
     stems.push(stem)
   }
 

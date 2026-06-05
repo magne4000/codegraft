@@ -34,15 +34,6 @@ interface Scope {
   bindings: Map<string, RichNode>
 }
 
-const FUNCTIONS = new Set([
-  'function_declaration',
-  'generator_function_declaration',
-  'function_expression',
-  'generator_function',
-  'arrow_function',
-  'method_definition',
-])
-
 class ScopeResolver implements Resolver {
   #abstain = false
   readonly #root: Scope
@@ -107,19 +98,13 @@ class ScopeResolver implements Resolver {
   #walk(node: RichNode, scope: Scope, fnScope: Scope): void {
     if (this.#abstain) return
     switch (node.type) {
+      // `with` makes any bare name a possible property; a TS namespace/ambient-module exposes its
+      // members as `X.m` (so a partial rename corrupts). Both are beyond syntactic resolution.
       case 'with_statement':
-      case 'internal_module': // TS `namespace X {}` — exported members are visible as `X.m`, so a
-      case 'module': // TS `module 'x' {}`      partial rename would corrupt; abstain rather than guess.
+      case 'internal_module': // namespace X {}
+      case 'module': // module 'x' {}
         this.#abstain = true
         return
-      case 'enum_declaration': {
-        // An enum binds its name in the enclosing scope (like a class). Member names are
-        // `property_identifier` (reached as `E.Member`), never free identifiers, so walking the
-        // body here only resolves initialiser references — it can't mis-bind a member.
-        this.#bind(scope, node.child('name'))
-        this.#walkChildren(node.child('body'), scope, fnScope)
-        return
-      }
       case 'call_expression':
         if (node.child('function')?.text === 'eval') {
           this.#abstain = true
@@ -145,8 +130,11 @@ class ScopeResolver implements Resolver {
         this.#walkChildren(node.child('body'), inner, inner)
         return
       }
-      case 'class_declaration': {
-        this.#bind(scope, node.child('name')) // class name: block-scoped in the enclosing scope
+      // A class/enum name binds in the enclosing scope; their members are `property_identifier`
+      // (reached as `X.member`), never free identifiers, so walking the body here is safe.
+      case 'class_declaration':
+      case 'enum_declaration': {
+        this.#bind(scope, node.child('name'))
         this.#walkChildren(node.child('body'), scope, fnScope)
         return
       }
