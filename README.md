@@ -41,7 +41,13 @@ Declaring the namespace (in `defineCodemod({ namespace: '$$' }, …)`) also enab
 
 ## Codemod API (`@trast/codemod`)
 
-The authoring surface: a jscodeshift-style collection over the CST that records magic-string edits. `find`/`filter`/`closest`/`parent`/`children` query; `replaceWith`/`remove`/`unwrap` edit; `insertBefore`/`insertAfter`/`append`/`prepend`/`ensureImport` insert; `references`/`definition` resolve bindings (JS/TS/TSX). Everything hangs off `root`/`ctx`, so a codemod serialises for `trast build`.
+The authoring surface: a jscodeshift-style collection over the CST that records magic-string edits, everything hanging off `root`/`ctx` so a codemod serialises for `trast build`.
+
+- **Query** — `find` (a concrete type or a grammar supertype; field matchers can nest), `filter`, `closest`, `parent`, `children`, `siblings`/`nextSibling`/`prevSibling`, `ancestors`, `closestScope`, `first`/`at`, `isOfType`/`getTypes`.
+- **Edit** — `replaceWith` (a string or `(node) => string`), `mapText`, `setField`, `remove`, `unwrap`, `wrap`, `moveBefore`/`moveAfter`.
+- **Insert** — `insertBefore`/`insertAfter`, `append`/`prepend`, `ensureImport`; build the text with the grammar-validated `` code`…` ``.
+- **Scope** (JS/TS/TSX, confident-or-abstain) — `references`, `definition`, `lookup`, `bindingsInScope`.
+- **Comments** — `addLeadingComment`/`addTrailingComment`, `removeComments`, `mapLeadingComment`, plus the `directive`/`dropDirective` gates.
 
 ```ts
 import { defineCodemod } from '@trast/codemod'
@@ -72,7 +78,7 @@ export default defineCodemod((root) => {
 })
 ```
 
-**Scope** (`node.references()` / `node.definition()`) is **confident-or-abstain**: it returns `null` rather than guess when a tree contains a construct it doesn't fully model (`with`, `eval`, a TS namespace/enum, an object shorthand), so a rename never fires on a guess. JS/TS/TSX only; other languages return `null`. Vocabulary is **tree-sitter-native** — node types and field names are the grammar's own (`call_expression`, field `function`), no Babel alias layer.
+**Scope** (`references`/`definition`, plus `lookup`/`bindingsInScope`) is **confident-or-abstain**: it returns `null` rather than guess when a tree contains a construct it doesn't fully model (`with`, `eval`, a TS namespace or ambient module, an object shorthand), so a rename never fires on a guess. JS/TS/TSX only; other languages return `null`. Vocabulary is **tree-sitter-native** — node types and field names are the grammar's own (`call_expression`, field `function`), no Babel alias layer.
 
 ```ts
 root.find('identifier', { text: 'oldName' }).forEach((id) => {
@@ -105,7 +111,7 @@ Trast's collection shape — `find` → navigate → edit — is modelled on [js
 Picking between them:
 
 - **Type-aware or cross-file refactors** (semantic rename, follow a symbol through the program) → **ts-morph**, which runs the real TypeScript checker. Trast is purely syntactic and single-file; its `references()`/`definition()` **abstain** (return `null`) on anything they can't resolve from the CST alone, so a rename never fires on a guess.
-- **JS-family transforms with an existing corpus to reuse** → **jscodeshift** / **Babel**. Their typed builders construct structurally valid nodes; Trast inserts raw text, checked only when it's re-parsed.
+- **JS-family transforms with an existing corpus to reuse** → **jscodeshift** / **Babel**. Their *typed* builders construct nodes that are valid by construction; Trast builds with the `` code`…` `` template, which validates the snippet against the grammar (it just isn't a typed node API).
 - **Fast declarative search-lint-rewrite by pattern** → **ast-grep** (or GritQL) — close in spirit to Trast's removed `expr` rules; Trast chose an imperative collection instead, for insertion and navigation that patterns can't express.
 - **Trast's niche**: real grammars across the JS family *and* HTML/CSS/Vue in one API, byte-exact edits with source maps (recast/Babel reprint the subtree they touch), comment-directive–gated edits, and shipping the transform **into a build step** (`trast build`) or **bundler** (`@trast/unplugin`) rather than running it once.
 
