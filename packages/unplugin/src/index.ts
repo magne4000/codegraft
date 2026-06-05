@@ -1,14 +1,14 @@
 import { createUnplugin } from 'unplugin'
-import { makeUnpluginOptions, type TrastOptions } from './core.js'
+import { makeUnpluginOptions, type CodegraftOptions } from './core.js'
 
 /**
- * The unified Trast plugin. `trast(options)` returns an unplugin instance — use
- * `trast(opts).vite` / `.rollup` / `.rolldown` / `.esbuild` / `.webpack` / `.rspack` /
- * `.farm`, or import a per-bundler entry (e.g. `@trast/unplugin/vite`) for the common
- * `plugins: [trast(opts)]` shape.
+ * The unified Codegraft plugin. `codegraft(options)` returns an unplugin instance — use
+ * `codegraft(opts).vite` / `.rollup` / `.rolldown` / `.esbuild` / `.webpack` / `.rspack` /
+ * `.farm`, or import a per-bundler entry (e.g. `@codegraft/unplugin/vite`) for the common
+ * `plugins: [codegraft(opts)]` shape.
  */
-export function trast<Ctx extends Record<string, unknown>>(options: TrastOptions<Ctx>) {
+export function codegraft<Ctx extends Record<string, unknown>>(options: CodegraftOptions<Ctx>) {
   return createUnplugin(() => makeUnpluginOptions(options))
 }
 
-export type { TrastOptions } from './core.js'
+export type { CodegraftOptions } from './core.js'

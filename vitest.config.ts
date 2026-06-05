@@ -10,11 +10,11 @@ export default defineConfig({
     // Array form: entries are matched in order, so the more specific "/internal"
     // subpath must precede the bare package alias.
     alias: [
-      { find: '@trast/core/internal', replacement: src('./packages/core/src/internal.ts') },
-      { find: '@trast/core', replacement: src('./packages/core/src/index.ts') },
-      { find: '@trast/codemod', replacement: src('./packages/codemod/src/index.ts') },
-      { find: '@trast/vue', replacement: src('./packages/vue/src/index.ts') },
-      { find: '@trast/unplugin', replacement: src('./packages/unplugin/src/index.ts') },
+      { find: '@codegraft/core/internal', replacement: src('./packages/core/src/internal.ts') },
+      { find: '@codegraft/core', replacement: src('./packages/core/src/index.ts') },
+      { find: '@codegraft/codemod', replacement: src('./packages/codemod/src/index.ts') },
+      { find: '@codegraft/vue', replacement: src('./packages/vue/src/index.ts') },
+      { find: '@codegraft/unplugin', replacement: src('./packages/unplugin/src/index.ts') },
     ],
   },
   test: {

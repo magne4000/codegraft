@@ -4,10 +4,10 @@
 # The npm `tree-sitter-typescript` ships an ABI-14 wasm (no supertype metadata, so
 # `find('expression')` etc. can't expand). Its grammar source *does* declare supertypes, so
 # regenerating with a current CLI (ABI 15) recovers them. We vendor the result here, the same way
-# `@trast/vue` vendors its grammar. Needs network: downloads the grammar tarball and, on first
+# `@codegraft/vue` vendors its grammar. Needs network: downloads the grammar tarball and, on first
 # run, the wasi-sdk the CLI builds with.
 #
-#   pnpm --filter @trast/core regen-ts-wasm [git-ref]   # ref defaults to the pinned version
+#   pnpm --filter @codegraft/core regen-ts-wasm [git-ref]   # ref defaults to the pinned version
 set -euo pipefail
 
 ref="${1:-v0.23.2}"
@@ -19,7 +19,7 @@ curl -fsSL "https://codeload.github.com/tree-sitter/tree-sitter-typescript/tar.g
   | tar -xz -C "$tmp"
 cd "$tmp"/tree-sitter-typescript-*
 
-# Pin the CLI to the web-tree-sitter line @trast/core targets (grammar ABI must match). Regenerate
+# Pin the CLI to the web-tree-sitter line @codegraft/core targets (grammar ABI must match). Regenerate
 # parser.c from the committed grammar.json (no JS toolchain needed) so it carries ABI-15 supertypes,
 # then compile to wasm. `generate` finds the repo-root tree-sitter.json (required for ABI 15).
 for grammar in typescript tsx; do

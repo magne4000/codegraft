@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import type { Collection } from '@trast/core'
-import { vueSplitter } from '@trast/vue'
+import type { Collection } from '@codegraft/core'
+import { vueSplitter } from '@codegraft/vue'
 import { defineCodemod } from './codemod.js'
 
 type Ctx = { BATI: { has(feature: string): boolean } }

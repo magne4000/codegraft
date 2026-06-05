@@ -1,5 +1,5 @@
 {
-  "name": "@trast/unplugin",
+  "name": "@codegraft/unplugin",
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
@@ -17,12 +17,12 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@trast/core": "workspace:*",
+    "@codegraft/core": "workspace:*",
     "unplugin": "^3.0.0"
   },
   "devDependencies": {
-    "@trast/codemod": "workspace:*",
-    "@trast/vue": "workspace:*",
+    "@codegraft/codemod": "workspace:*",
+    "@codegraft/vue": "workspace:*",
     "rollup": "^4.0.0"
   }
 }

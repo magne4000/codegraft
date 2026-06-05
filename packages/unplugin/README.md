@@ -1,18 +1,18 @@
-# @trast/unplugin
+# @codegraft/unplugin
 
-Apply [Trast](../../README.md) transforms inside a bundler, via
+Apply [Codegraft](../../README.md) transforms inside a bundler, via
 [unplugin](https://github.com/unjs/unplugin) — Vite, Rollup, Rolldown, esbuild, webpack,
 Rspack, Farm.
 
 ```ts
 // vite.config.ts
-import trast from '@trast/unplugin/vite'
+import codegraft from '@codegraft/unplugin/vite'
 import codemod from './bati-codemod'
 
 export default {
-  plugins: [trast({ codemod, context: { BATI: { has: (f) => f === 'auth' } } })],
+  plugins: [codegraft({ codemod, context: { BATI: { has: (f) => f === 'auth' } } })],
 }
 ```
 
 Options: `{ codemod, context, splitters?, include?, exclude? }`. Pass `splitters: [vueSplitter]`
-(from `@trast/vue`) to handle `.vue`. Emits `{ code, map }`.
+(from `@codegraft/vue`) to handle `.vue`. Emits `{ code, map }`.

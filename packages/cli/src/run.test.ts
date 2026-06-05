@@ -3,8 +3,8 @@ import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createCodemodTransformer, type LazyTransformer } from '@trast/core'
-import { defineCodemod } from '@trast/codemod'
+import { createCodemodTransformer, type LazyTransformer } from '@codegraft/core'
+import { defineCodemod } from '@codegraft/codemod'
 import { build } from './build.js'
 import { runFiles, run } from './run.js'
 
@@ -24,7 +24,7 @@ function tsxTransformers(): Record<string, LazyTransformer> {
 }
 
 async function workdir(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'trast-run-'))
+  const dir = await mkdtemp(join(tmpdir(), 'codegraft-run-'))
   await writeFile(join(dir, 'a.tsx'), IF_ELSE)
   await writeFile(join(dir, 'b.css'), 'a { color: red }')
   return dir
@@ -99,7 +99,7 @@ describe('run (glob + load)', () => {
   })
 
   it('globs files, loads the compiled barrel, and applies it in place', async () => {
-    const work = await mkdtemp(join(tmpdir(), 'trast-run-glob-'))
+    const work = await mkdtemp(join(tmpdir(), 'codegraft-run-glob-'))
     await writeFile(join(work, 'page.tsx'), IF_ELSE)
     const result = await run({
       patterns: ['*.tsx'],

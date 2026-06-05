@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { mkdir, rm, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
-import { defineCodemod } from '@trast/codemod'
+import { defineCodemod } from '@codegraft/codemod'
 import { build, buildCodemod } from './build.js'
 
 const cliDir = fileURLToPath(new URL('..', import.meta.url))
 const fixture = join(cliDir, 'test', 'fixtures', 'bati-codemod.ts')
 // Write output inside the package (gitignored) so vitest resolves the emitted
-// module's `@trast/core` import via the workspace alias.
+// module's `@codegraft/core` import via the workspace alias.
 const outDir = join(cliDir, '.tmp', 'build')
 
 beforeEach(async () => {
@@ -26,9 +26,9 @@ describe('buildCodemod', () => {
     expect(result.files).toEqual(['tsx.js', 'index.js', 'package.json'])
 
     const tsx = await readFile(join(outDir, 'tsx.js'), 'utf8')
-    expect(tsx).toContain("from '@trast/core'")
-    expect(tsx).not.toContain('@trast/codemod') // compiled output never imports the authoring package
-    expect(tsx).not.toContain('@trast/vue')
+    expect(tsx).toContain("from '@codegraft/core'")
+    expect(tsx).not.toContain('@codegraft/codemod') // compiled output never imports the authoring package
+    expect(tsx).not.toContain('@codegraft/vue')
 
     const barrel = await readFile(join(outDir, 'index.js'), 'utf8')
     expect(barrel).toContain("export { transform as tsx } from './tsx.js'")

@@ -1,7 +1,7 @@
-import { defineCodemod } from '@trast/codemod'
+import { defineCodemod } from '@codegraft/codemod'
 
 // A minimal Bati-style codemod for the build/run tests. The namespace is data-shaped
-// (`$$.flags.x`) so the context is JSON-serialisable — the form `trast run --context`
+// (`$$.flags.x`) so the context is JSON-serialisable — the form `codegraft run --context`
 // accepts — and the body is param-rooted (everything hangs off `root`/`ctx`), so it
 // serialises cleanly in compiled mode.
 export default defineCodemod<{ flags: Record<string, boolean> }>({ namespace: '$$' }, (root, ctx) => {

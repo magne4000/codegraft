@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { RichNode } from '@trast/core'
+import type { RichNode } from '@codegraft/core'
 import { defineCodemod } from './codemod.js'
 
 describe('defineCodemod — query + edits', () => {

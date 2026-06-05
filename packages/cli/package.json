@@ -1,16 +1,16 @@
 {
-  "name": "@trast/cli",
+  "name": "@codegraft/cli",
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
   "bin": {
-    "trast": "./dist/cli.js"
+    "codegraft": "./dist/cli.js"
   },
   "scripts": {
     "build": "tsc -b"
   },
   "dependencies": {
-    "@trast/codemod": "workspace:*",
-    "@trast/core": "workspace:*"
+    "@codegraft/codemod": "workspace:*",
+    "@codegraft/core": "workspace:*"
   }
 }

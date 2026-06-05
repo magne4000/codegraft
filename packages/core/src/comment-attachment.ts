@@ -5,7 +5,7 @@ import type { GrammarId, RichNode } from './types.js'
  * for "what is a comment node". Consumed by the attachment pass below and by
  * `rich-node.ts` to keep comments out of `RichNode.children`.
  *
- * Every grammar Trast targets today names its comment node `comment`; the map is
+ * Every grammar Codegraft targets today names its comment node `comment`; the map is
  * kept per-grammar so a future grammar with a different name slots in without
  * touching either consumer.
  */

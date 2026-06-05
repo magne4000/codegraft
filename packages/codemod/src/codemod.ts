@@ -1,5 +1,5 @@
-import type { Collection, GrammarId, Transformer, ZoneSplitter } from '@trast/core'
-import { createCodemodTransformer } from '@trast/core'
+import type { Collection, GrammarId, Transformer, ZoneSplitter } from '@codegraft/core'
+import { createCodemodTransformer } from '@codegraft/core'
 
 /** A codemod body: receives the file's {@link Collection} and the run context, records edits. */
 export type CodemodFn<Ctx extends Record<string, unknown>> = (root: Collection, context: Ctx) => void
@@ -15,7 +15,7 @@ export interface CodemodConfig {
 
 /**
  * Authoring handle for a codemod. `forTarget` builds an interpreted transformer; `fn`/`namespace`
- * are read by `trast build` for compiled mode. Because the body is param-rooted (everything hangs
+ * are read by `codegraft build` for compiled mode. Because the body is param-rooted (everything hangs
  * off `root`/`context`), `fn.toString()` is self-contained and serialises.
  */
 export class Codemod<Ctx extends Record<string, unknown> = Record<string, unknown>> {

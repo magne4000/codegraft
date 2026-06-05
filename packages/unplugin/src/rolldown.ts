@@ -1,6 +1,6 @@
-import { trast } from './index.js'
-import type { TrastOptions } from './core.js'
+import { codegraft } from './index.js'
+import type { CodegraftOptions } from './core.js'
 
-/** Trast plugin for rolldown: `plugins: [trast({ rules, context })]`. */
-export default <Ctx extends Record<string, unknown>>(options: TrastOptions<Ctx>) =>
-  trast(options).rolldown()
+/** Codegraft plugin for rolldown: `plugins: [codegraft({ rules, context })]`. */
+export default <Ctx extends Record<string, unknown>>(options: CodegraftOptions<Ctx>) =>
+  codegraft(options).rolldown()

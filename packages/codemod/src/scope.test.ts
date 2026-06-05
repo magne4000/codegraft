@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { Collection } from '@trast/core'
+import type { Collection } from '@codegraft/core'
 import { defineCodemod } from './codemod.js'
 
 // Rename the binding located by `locate` (a declaration's name) and all its references to `to`,

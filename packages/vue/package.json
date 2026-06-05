@@ -1,5 +1,5 @@
 {
-  "name": "@trast/vue",
+  "name": "@codegraft/vue",
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
@@ -15,7 +15,7 @@
     "regen-wasm": "bash scripts/regen-wasm.sh"
   },
   "dependencies": {
-    "@trast/core": "workspace:*"
+    "@codegraft/core": "workspace:*"
   },
   "peerDependencies": {
     "tree-sitter-css": "^0.25.0",

@@ -1,4 +1,4 @@
-// The contract every other file in @trast/core (and the @trast/codemod / @trast/cli
+// The contract every other file in @codegraft/core (and the @codegraft/codemod / @codegraft/cli
 // packages downstream) implements against. No imports: this module is the root of
 // the type graph and must stay dependency-free.
 
@@ -11,7 +11,7 @@ export type Point = { row: number; column: number }
 
 /**
  * The open extension point for multi-zone file formats (Vue SFC, Astro, …). The
- * only value today is `vueSplitter`, exported from `@trast/vue`; core stays
+ * only value today is `vueSplitter`, exported from `@codegraft/vue`; core stays
  * ignorant of any concrete format.
  *
  * `init()` lets a splitter load whatever grammar it parses the shell with (Vue
@@ -27,9 +27,9 @@ export interface ZoneSplitter {
   /** Which grammars this format can produce. */
   readonly grammars: GrammarId[]
   /**
-   * How `trast build` imports this splitter into generated code, e.g.
-   * `{ importName: 'vueSplitter', importPath: '@trast/vue' }` → emits
-   * `import { vueSplitter } from '@trast/vue'`. A splitter describes its own import so
+   * How `codegraft build` imports this splitter into generated code, e.g.
+   * `{ importName: 'vueSplitter', importPath: '@codegraft/vue' }` → emits
+   * `import { vueSplitter } from '@codegraft/vue'`. A splitter describes its own import so
    * new SFC formats need no hard-coded map in the serialiser. Required to be a build
    * target; optional here so purely-runtime stub splitters (tests) can omit it.
    */
@@ -106,7 +106,7 @@ export interface SourceMap {
 export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
   transform(source: string, context: Ctx): string
   /** Like {@link transform} but also returns a source map (`options.source` names the
-   *  input in the map). Used by build-pipeline integrations such as `@trast/unplugin`. */
+   *  input in the map). Used by build-pipeline integrations such as `@codegraft/unplugin`. */
   transformWithMap(source: string, context: Ctx, options?: { source?: string }): { code: string; map: SourceMap }
 }
 

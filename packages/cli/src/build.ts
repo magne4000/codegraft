@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { GrammarId, ZoneSplitter } from '@trast/core'
-import { assert, grammarPackage } from '@trast/core/internal'
-import type { Codemod } from '@trast/codemod'
+import type { GrammarId, ZoneSplitter } from '@codegraft/core'
+import { assert, grammarPackage } from '@codegraft/core/internal'
+import type { Codemod } from '@codegraft/codemod'
 import { serialiseCodemod } from './serialise.js'
 
 type Target = GrammarId | ZoneSplitter
@@ -25,7 +25,7 @@ interface CodemodModule {
 const isCodemod = (x: unknown): x is Codemod => typeof (x as Codemod | undefined)?.fn === 'function'
 
 /**
- * `trast build`: import a codemod file and emit one transformer module per declared target,
+ * `codegraft build`: import a codemod file and emit one transformer module per declared target,
  * a barrel, and a `package.json`. The file must be importable by the running Node (compile TS
  * first, or run under a loader).
  */
@@ -67,7 +67,7 @@ function grammarPackagesFor(targets: Target[]): string[] {
     if (typeof target === 'string') grammars.add(target)
     else for (const g of target.grammars) grammars.add(g)
   }
-  // null = a vendored grammar (ships with @trast/core), so it needs no peer.
+  // null = a vendored grammar (ships with @codegraft/core), so it needs no peer.
   const packages = [...grammars].map(grammarPackage).filter((p): p is string => p !== null)
   return [...new Set(packages)].sort()
 }

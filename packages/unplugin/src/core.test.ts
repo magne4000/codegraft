@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { defineCodemod } from '@trast/codemod'
-import { vueSplitter } from '@trast/vue'
+import { defineCodemod } from '@codegraft/codemod'
+import { vueSplitter } from '@codegraft/vue'
 import { makeUnpluginOptions } from './core.js'
-import { trast } from './index.js'
+import { codegraft } from './index.js'
 
 const IF_ELSE = 'if ($$.BATI.has("auth")) { a() } else { b() }'
 type Ctx = { BATI: { has(feature: string): boolean } }
@@ -78,12 +78,12 @@ describe('makeUnpluginOptions', () => {
   })
 })
 
-describe('trast adapters', () => {
+describe('codegraft adapters', () => {
   it('exposes every bundler adapter and produces a named plugin', () => {
-    const instance = trast({ codemod, context: bati() })
+    const instance = codegraft({ codemod, context: bati() })
     for (const adapter of ['vite', 'rollup', 'rolldown', 'esbuild', 'webpack', 'rspack', 'farm'] as const) {
       expect(typeof instance[adapter]).toBe('function')
     }
-    expect(instance.rollup()).toMatchObject({ name: '@trast/unplugin' })
+    expect(instance.rollup()).toMatchObject({ name: '@codegraft/unplugin' })
   })
 })

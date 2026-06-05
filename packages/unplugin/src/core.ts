@@ -1,13 +1,13 @@
 import type { FilterPattern, UnpluginOptions } from 'unplugin'
-import type { GrammarId, Transformer, ZoneSplitter } from '@trast/core'
-import { EXTENSION_GRAMMAR } from '@trast/core/internal'
+import type { GrammarId, Transformer, ZoneSplitter } from '@codegraft/core'
+import { EXTENSION_GRAMMAR } from '@codegraft/core/internal'
 
-/** A codemod by shape — so the plugin needn't depend on `@trast/codemod` just for a type. */
+/** A codemod by shape — so the plugin needn't depend on `@codegraft/codemod` just for a type. */
 interface TransformerSource<Ctx extends Record<string, unknown>> {
   forTarget(target: GrammarId | ZoneSplitter): Promise<Transformer<Ctx>>
 }
 
-export interface TrastOptions<Ctx extends Record<string, unknown>> {
+export interface CodegraftOptions<Ctx extends Record<string, unknown>> {
   /** A `defineCodemod(...)` result. */
   codemod: TransformerSource<Ctx>
   /** The run context threaded into every rewrite. */
@@ -45,16 +45,16 @@ const cacheKey = (target: GrammarId | ZoneSplitter) => (typeof target === 'strin
  * the file isn't handled or is unchanged, so the bundler skips it.
  */
 export function makeUnpluginOptions<Ctx extends Record<string, unknown>>(
-  options: TrastOptions<Ctx>,
+  options: CodegraftOptions<Ctx>,
 ): UnpluginOptions {
   const splitters = options.splitters ?? []
   const cache = new Map<string, Promise<Transformer<Ctx>>>()
 
   return {
-    name: '@trast/unplugin',
+    name: '@codegraft/unplugin',
     transform: {
       // unplugin's native id filter applies include/exclude; the handler skips any
-      // extension Trast doesn't handle (returning null).
+      // extension Codegraft doesn't handle (returning null).
       filter: { id: { include: options.include, exclude: options.exclude } },
       async handler(code, id) {
         const target = targetForId(id, splitters)

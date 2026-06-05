@@ -3,7 +3,7 @@ import { Parser } from './parser.js'
 import { splitAndParse } from './zone-splitter.js'
 import type { ZoneSplitter } from './types.js'
 
-// A stub two-zone splitter standing in for @trast/vue: core has no Vue dependency, so
+// A stub two-zone splitter standing in for @codegraft/vue: core has no Vue dependency, so
 // its own tests exercise the pipeline through an inline splitter. The source is split
 // at a marker into a typescript zone and a css zone.
 const MARKER = '\n///---\n'

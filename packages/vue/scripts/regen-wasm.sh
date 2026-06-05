@@ -4,7 +4,7 @@
 # WASI build via tree-sitter-cli's bundled wasi-sdk (no Docker/emscripten). Needs
 # network: downloads the grammar tarball and, on first run, wasi-sdk.
 #
-#   pnpm --filter @trast/vue regen-wasm [git-ref]   # git-ref defaults to "main"
+#   pnpm --filter @codegraft/vue regen-wasm [git-ref]   # git-ref defaults to "main"
 set -euo pipefail
 
 ref="${1:-main}"
@@ -16,6 +16,6 @@ curl -fsSL "https://codeload.github.com/tree-sitter-grammars/tree-sitter-vue/tar
   | tar -xz -C "$tmp"
 cd "$tmp"/tree-sitter-vue-*
 
-# Pin the CLI to the web-tree-sitter line @trast/core targets (grammar ABI must match).
+# Pin the CLI to the web-tree-sitter line @codegraft/core targets (grammar ABI must match).
 npx --yes tree-sitter-cli@0.26.9 build --wasm . -o "$out"
 echo "wrote ${out}"

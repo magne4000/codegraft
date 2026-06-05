@@ -38,7 +38,7 @@ type TextArg = string | ((node: Collection) => string)
  * node — the shape you get inside `forEach`, after `first()`/`at()`, or from `field()`.
  *
  * Everything hangs off this object (and the run context), so a codemod's `.toString()` is
- * self-contained and serialises for `trast build` (§5 of the plan).
+ * self-contained and serialises for `codegraft build` (§5 of the plan).
  */
 export class Collection {
   readonly #nodes: RichNode[]

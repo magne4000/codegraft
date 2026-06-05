@@ -1,9 +1,9 @@
 import { fileURLToPath } from 'node:url'
-import type { GrammarId, ZoneSplitter } from '@trast/core'
-import { Parser, assert, type Node } from '@trast/core/internal'
+import type { GrammarId, ZoneSplitter } from '@codegraft/core'
+import { Parser, assert, type Node } from '@codegraft/core/internal'
 
 // The vue grammar wasm is vendored in this package (tree-sitter-vue ships no prebuilt
-// wasm), so @trast/vue owns its grammar with no tree-sitter-vue dependency.
+// wasm), so @codegraft/vue owns its grammar with no tree-sitter-vue dependency.
 const VUE_WASM = fileURLToPath(new URL('../wasm/tree-sitter-vue.wasm', import.meta.url))
 const VUE_GRAMMAR = 'vue' // internal parser cache key; not a public GrammarId
 
@@ -20,7 +20,7 @@ export const vueSplitter: ZoneSplitter = {
   id: 'vue',
   grammars: ['html', 'typescript', 'tsx', 'javascript', 'css'],
   importName: 'vueSplitter',
-  importPath: '@trast/vue',
+  importPath: '@codegraft/vue',
 
   async init(): Promise<void> {
     await Parser.loadGrammar(VUE_GRAMMAR, VUE_WASM)

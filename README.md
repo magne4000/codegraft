@@ -1,9 +1,9 @@
-# Trast
+# Codegraft
 
 > [!WARNING]
-> **Work in progress.** Trast is pre-1.0 and unstable — the API can change without notice and it isn't battle-tested. Pin exact versions and expect breaking changes.
+> **Work in progress.** Codegraft is pre-1.0 and unstable — the API can change without notice and it isn't battle-tested. Pin exact versions and expect breaking changes.
 
-Structural, build-time code transformation built on [tree-sitter](https://tree-sitter.github.io/) (via `web-tree-sitter`/WASM). You author **codemods** — a jscodeshift-style collection API that finds, navigates, edits, and inserts over the syntax tree — and Trast applies them as precise text edits (with source maps). The motivating use case is collapsing scaffolding conditionals — e.g. [Bati](https://batijs.dev/)'s feature flags — but the engine is general.
+Structural, build-time code transformation built on [tree-sitter](https://tree-sitter.github.io/) (via `web-tree-sitter`/WASM). You author **codemods** — a jscodeshift-style collection API that finds, navigates, edits, and inserts over the syntax tree — and Codegraft applies them as precise text edits (with source maps). The motivating use case is collapsing scaffolding conditionals — e.g. [Bati](https://batijs.dev/)'s feature flags — but the engine is general.
 
 ```ts
 // in:  if ($$.BATI.has("auth")) { return <Dashboard /> } else { return <Landing /> }
@@ -15,20 +15,20 @@ Structural, build-time code transformation built on [tree-sitter](https://tree-s
 
 | Package | Role |
 |---|---|
-| **`@trast/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, the `Collection`, scope `Resolver`, edit application (magic-string), `createCodemodTransformer`, `evaluate`. |
-| **`@trast/codemod`** | Authoring: `defineCodemod` — a jscodeshift-style collection API (find / navigate / edit / insert / scope). |
-| **`@trast/cli`** | `trast build` (compile a codemod to standalone modules) and `trast run` (apply to files). |
-| **`@trast/unplugin`** | Apply transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm. |
-| **`@trast/vue`** | `vueSplitter` — split a `.vue` SFC into `<template>`/`<script>`/`<style>` zones. |
+| **`@codegraft/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, the `Collection`, scope `Resolver`, edit application (magic-string), `createCodemodTransformer`, `evaluate`. |
+| **`@codegraft/codemod`** | Authoring: `defineCodemod` — a jscodeshift-style collection API (find / navigate / edit / insert / scope). |
+| **`@codegraft/cli`** | `codegraft build` (compile a codemod to standalone modules) and `codegraft run` (apply to files). |
+| **`@codegraft/unplugin`** | Apply transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm. |
+| **`@codegraft/vue`** | `vueSplitter` — split a `.vue` SFC into `<template>`/`<script>`/`<style>` zones. |
 
-Dependency graph: `@trast/core ← @trast/codemod ← @trast/cli`, and `@trast/core ← {@trast/vue, @trast/unplugin}`.
+Dependency graph: `@codegraft/core ← @codegraft/codemod ← @codegraft/cli`, and `@codegraft/core ← {@codegraft/vue, @codegraft/unplugin}`.
 
 ## The `$$` namespace
 
 Conditions reference your build-time globals through a single namespace — `$$` by default, configurable. The **shape is yours**: type it once with a `declare global`, so source files type-check with no import, and the same name reads naturally inside directive comments.
 
 ```ts
-// trast-env.d.ts
+// codegraft-env.d.ts
 declare global {
   const $$: { BATI: { has(feature: string): boolean } }
 }
@@ -42,9 +42,9 @@ if ($$.BATI.has("auth")) doThis() else doThat()
 
 Declaring the namespace (in `defineCodemod({ namespace: '$$' }, …)`) also enables a **scan-gate**: a file that never mentions `$$` is returned untouched without being parsed, so only files that opt in pay for a parse. Pick a name distinctive enough to rarely appear by accident.
 
-## Codemod API (`@trast/codemod`)
+## Codemod API (`@codegraft/codemod`)
 
-The authoring surface: a jscodeshift-style collection over the CST that records magic-string edits, everything hanging off `root`/`ctx` so a codemod serialises for `trast build`.
+The authoring surface: a jscodeshift-style collection over the CST that records magic-string edits, everything hanging off `root`/`ctx` so a codemod serialises for `codegraft build`.
 
 - **Query** — `find` (a concrete type or a grammar supertype; field matchers can nest), `filter`, `closest`, `parent`, `children`, `siblings`/`nextSibling`/`prevSibling`, `ancestors`, `closestScope`, `first`/`at`, `isOfType`/`getTypes`.
 - **Edit** — `replaceWith` (a string or `(node) => string`), `setField`, `remove`, `unwrap`, `wrap`, `moveBefore`/`moveAfter`.
@@ -53,7 +53,7 @@ The authoring surface: a jscodeshift-style collection over the CST that records 
 - **Comments** — `addLeadingComment`/`addTrailingComment`, `removeComments`, `mapLeadingComment`, plus the `directive`/`dropDirective` gates.
 
 ```ts
-import { defineCodemod } from '@trast/codemod'
+import { defineCodemod } from '@codegraft/codemod'
 
 // Collapse build-time conditionals (the Bati case), nesting-safe:
 export default defineCodemod<Ctx>({ namespace: '$$' }, (root, ctx) => {
@@ -64,7 +64,7 @@ export default defineCodemod<Ctx>({ namespace: '$$' }, (root, ctx) => {
     else node.remove()
   })
 })
-export const targets = ['tsx'] // for `trast build`
+export const targets = ['tsx'] // for `codegraft build`
 ```
 
 **Insertion** is the thing the template model can't do — e.g. register a Vite plugin idempotently:
@@ -101,11 +101,11 @@ A condition that isn't pure over the context (a runtime variable, an unsupported
 
 ## Compared to other tools
 
-Trast's collection shape — `find` → navigate → edit — is modelled on [jscodeshift](https://github.com/facebook/jscodeshift), so that API reads familiarly. Across the wider landscape the engines differ on a few axes:
+Codegraft's collection shape — `find` → navigate → edit — is modelled on [jscodeshift](https://github.com/facebook/jscodeshift), so that API reads familiarly. Across the wider landscape the engines differ on a few axes:
 
 | Tool | Foundation | Languages | Authoring | Output | Type-aware |
 |---|---|---|---|---|---|
-| **Trast** | tree-sitter (CST) | JS / TS / TSX, HTML, CSS, `.vue` | imperative collection | byte-range edits + source maps | no (syntactic) |
+| **Codegraft** | tree-sitter (CST) | JS / TS / TSX, HTML, CSS, `.vue` | imperative collection | byte-range edits + source maps | no (syntactic) |
 | [jscodeshift](https://github.com/facebook/jscodeshift) | Babel + recast (AST) | JS / TS / JSX / Flow | imperative collection + typed builders | recast reprint | no |
 | [ts-morph](https://ts-morph.com/) | TypeScript compiler | TS / JS | imperative, typed | compiler reprint | **yes** (full type checker) |
 | [Babel](https://babeljs.io/) plugins | Babel (AST) | JS / TS / JSX | visitor plugins | regenerate (recast optional) | no |
@@ -113,10 +113,10 @@ Trast's collection shape — `find` → navigate → edit — is modelled on [js
 
 Picking between them:
 
-- **Type-aware or cross-file refactors** (semantic rename, follow a symbol through the program) → **ts-morph**, which runs the real TypeScript checker. Trast is purely syntactic and single-file; its `references()`/`definition()` **abstain** (return `null`) on anything they can't resolve from the CST alone, so a rename never fires on a guess.
-- **JS-family transforms with an existing corpus to reuse** → **jscodeshift** / **Babel**. Their *typed* builders construct nodes that are valid by construction; Trast builds with the `` code`…` `` template, which validates the snippet against the grammar (it just isn't a typed node API).
-- **Fast declarative search-lint-rewrite by pattern** → **ast-grep** (or GritQL) — close in spirit to Trast's removed `expr` rules; Trast chose an imperative collection instead, for insertion and navigation that patterns can't express.
-- **Trast's niche**: real grammars across the JS family *and* HTML/CSS/Vue in one API, byte-exact edits with source maps (recast/Babel reprint the subtree they touch), comment-directive–gated edits, and shipping the transform **into a build step** (`trast build`) or **bundler** (`@trast/unplugin`) rather than running it once.
+- **Type-aware or cross-file refactors** (semantic rename, follow a symbol through the program) → **ts-morph**, which runs the real TypeScript checker. Codegraft is purely syntactic and single-file; its `references()`/`definition()` **abstain** (return `null`) on anything they can't resolve from the CST alone, so a rename never fires on a guess.
+- **JS-family transforms with an existing corpus to reuse** → **jscodeshift** / **Babel**. Their *typed* builders construct nodes that are valid by construction; Codegraft builds with the `` code`…` `` template, which validates the snippet against the grammar (it just isn't a typed node API).
+- **Fast declarative search-lint-rewrite by pattern** → **ast-grep** (or GritQL) — close in spirit to Codegraft's removed `expr` rules; Codegraft chose an imperative collection instead, for insertion and navigation that patterns can't express.
+- **Codegraft's niche**: real grammars across the JS family *and* HTML/CSS/Vue in one API, byte-exact edits with source maps (recast/Babel reprint the subtree they touch), comment-directive–gated edits, and shipping the transform **into a build step** (`codegraft build`) or **bundler** (`@codegraft/unplugin`) rather than running it once.
 
 ## Using it
 
@@ -128,16 +128,16 @@ const transform = await codemod.forTarget('tsx')
 transform.transform(source, { BATI: { has: (f) => enabled.has(f) } })
 ```
 
-**Bundler** (`@trast/unplugin`):
+**Bundler** (`@codegraft/unplugin`):
 
 ```ts
 // vite.config.ts
-import trast from '@trast/unplugin/vite'
-import { vueSplitter } from '@trast/vue'
+import codegraft from '@codegraft/unplugin/vite'
+import { vueSplitter } from '@codegraft/vue'
 import codemod from './bati-codemod'
 
 export default {
-  plugins: [trast({ codemod, context: { BATI: { has: (f) => enabled.has(f) } }, splitters: [vueSplitter] })],
+  plugins: [codegraft({ codemod, context: { BATI: { has: (f) => enabled.has(f) } }, splitters: [vueSplitter] })],
 }
 ```
 
@@ -146,8 +146,8 @@ export default {
 **CLI:**
 
 ```bash
-trast build bati-codemod.ts --output dist/    # emit dist/<target>.js (+ barrel)
-trast run "src/**/*.tsx" --transformer dist/index.js --context '{"flags":{"auth":true}}' --in-place
+codegraft build bati-codemod.ts --output dist/    # emit dist/<target>.js (+ barrel)
+codegraft run "src/**/*.tsx" --transformer dist/index.js --context '{"flags":{"auth":true}}' --in-place
 ```
 
 `--context` is JSON, so the CLI suits a **data-shaped** namespace (`$$.flags.auth`, comparisons). A method-valued namespace like `$$.BATI.has(...)` can't be expressed as JSON — supply it through the programmatic API (dev mode / unplugin) instead.
@@ -156,7 +156,7 @@ trast run "src/**/*.tsx" --transformer dist/index.js --context '{"flags":{"auth"
 
 `splitAndParse` turns a target into parsed zones (a single grammar → one zone; a `ZoneSplitter` → one per SFC section). Comments are attached to nodes, then your codemod runs against a `Collection` over every zone's tree, recording edits. Edits go through `magic-string` (so source maps stay precise); a narrow-delete like `unwrap` keeps the retained range editable, so nested conditionals collapse in one pass. Whitespace clean-up is left to Prettier.
 
-Because a codemod body is **param-rooted** (everything hangs off `root`/`context`), its `.toString()` is self-contained: `trast build` emits one module per target that depends only on `@trast/core` (via `createCodemodTransformer`) — the authoring package never ships to consumers.
+Because a codemod body is **param-rooted** (everything hangs off `root`/`context`), its `.toString()` is self-contained: `codegraft build` emits one module per target that depends only on `@codegraft/core` (via `createCodemodTransformer`) — the authoring package never ships to consumers.
 
 ## Development
 

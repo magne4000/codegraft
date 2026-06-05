@@ -1,8 +1,8 @@
 import { glob, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { LazyTransformer, Transformer } from '@trast/core'
-import { EXTENSION_GRAMMAR } from '@trast/core/internal'
+import type { LazyTransformer, Transformer } from '@codegraft/core'
+import { EXTENSION_GRAMMAR } from '@codegraft/core/internal'
 
 type TransformerMap = Record<string, LazyTransformer>
 
@@ -25,7 +25,7 @@ export interface RunResult {
 
 /**
  * Apply transformers to a fixed list of files (relative to `cwd`). The pure core of
- * `trast run` — no globbing or module loading, so it is directly testable. Each file's
+ * `codegraft run` — no globbing or module loading, so it is directly testable. Each file's
  * extension selects a transformer (lazily `init`-ed once); files with no matching
  * transformer are skipped.
  */
@@ -77,7 +77,7 @@ async function writeOutput(mode: RunMode, file: string, absolute: string, output
 }
 
 /**
- * `trast run`: resolve globs, load the compiled transformer barrel, and apply it.
+ * `codegraft run`: resolve globs, load the compiled transformer barrel, and apply it.
  * Thin wrapper over {@link runFiles} that adds the I/O the CLI needs.
  */
 export async function run(opts: {

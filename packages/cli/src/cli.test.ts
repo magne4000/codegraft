@@ -32,7 +32,7 @@ describe('cli main', () => {
   })
 
   it('run --in-place --context applies the compiled transformer', async () => {
-    const work = await mkdtemp(join(tmpdir(), 'trast-cli-'))
+    const work = await mkdtemp(join(tmpdir(), 'codegraft-cli-'))
     await writeFile(join(work, 'page.tsx'), IF_ELSE)
     await main(
       ['run', '*.tsx', '--transformer', join(distDir, 'index.js'), '--context', '{"flags":{"auth":true}}', '--in-place'],
@@ -42,7 +42,7 @@ describe('cli main', () => {
   })
 
   it('run defaults to dry-run (writes nothing)', async () => {
-    const work = await mkdtemp(join(tmpdir(), 'trast-cli-'))
+    const work = await mkdtemp(join(tmpdir(), 'codegraft-cli-'))
     await writeFile(join(work, 'page.tsx'), IF_ELSE)
     await main(
       ['run', '*.tsx', '--transformer', join(distDir, 'index.js'), '--context', '{"flags":{"auth":true}}'],

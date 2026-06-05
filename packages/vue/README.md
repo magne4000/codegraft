@@ -1,7 +1,7 @@
-# @trast/vue
+# @codegraft/vue
 
-Vue SFC support for [Trast](../../README.md). `vueSplitter` splits a `.vue` file into
-zones so a Trast codemod applies per section:
+Vue SFC support for [Codegraft](../../README.md). `vueSplitter` splits a `.vue` file into
+zones so a Codegraft codemod applies per section:
 
 | Section | Grammar |
 |---|---|
@@ -10,10 +10,10 @@ zones so a Trast codemod applies per section:
 | `<style>` | `css` |
 
 ```ts
-import { vueSplitter } from '@trast/vue'
+import { vueSplitter } from '@codegraft/vue'
 
 const transform = await codemod.forTarget(vueSplitter)
-// or, in @trast/unplugin:  trast({ codemod, context, splitters: [vueSplitter] })
+// or, in @codegraft/unplugin:  codegraft({ codemod, context, splitters: [vueSplitter] })
 ```
 
 ## Vendored grammar wasm
@@ -27,7 +27,7 @@ To regenerate it (WASI via `tree-sitter-cli`'s bundled wasi-sdk — no Docker/em
 needs network):
 
 ```bash
-pnpm --filter @trast/vue regen-wasm        # or: regen-wasm <git-ref>
+pnpm --filter @codegraft/vue regen-wasm        # or: regen-wasm <git-ref>
 ```
 
 WASI matters: `web-tree-sitter` ≥ 0.26 only loads WASI-built grammars, and the older

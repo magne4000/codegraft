@@ -66,7 +66,7 @@ async function loadLanguage(id: string, wasmPath?: string): Promise<Language> {
 }
 
 /** The npm package a consumer must install for a built-in grammar, or `null` for a vendored
- *  grammar that ships with `@trast/core`. */
+ *  grammar that ships with `@codegraft/core`. */
 export function grammarPackage(id: GrammarId): string | null {
   const spec = PEER_WASM[id]
   return spec ? spec.slice(0, spec.indexOf('/')) : null
@@ -81,7 +81,7 @@ function resolveBuiltinWasm(id: string): string {
     return require.resolve(spec)
   } catch {
     const pkg = spec.slice(0, spec.indexOf('/'))
-    throw new Error(`[trast] grammar '${id}' requires the optional peer '${pkg}'; add it to your dependencies`)
+    throw new Error(`[codegraft] grammar '${id}' requires the optional peer '${pkg}'; add it to your dependencies`)
   }
 }
 
