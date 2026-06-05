@@ -148,6 +148,19 @@ export class Collection {
     return def ? this.#select([def]) : null
   }
 
+  // ---- construction ----
+
+  /** Build a code string, interpolating values (a `Collection` contributes its text), validated
+   *  against the grammar of the first selected node — a syntax error asserts rather than emitting
+   *  malformed code. Validates as a standalone snippet, so build whole expressions or statements
+   *  and let `append`/`prepend` add separators. The result feeds any insert/replace. */
+  code(strings: TemplateStringsArray, ...values: unknown[]): string {
+    const built = strings.reduce((acc, s, i) => acc + s + (i < values.length ? snippet(values[i]) : ''), '')
+    const language = this.#firstNode().language
+    assert(!Parser.parse(built, language).rootNode.hasError, `code\`\`: invalid ${language} snippet: ${built}`)
+    return built
+  }
+
   // ---- edits ----
 
   /** Replace each selected node with `text`, or with the string a callback derives from it. */
@@ -332,6 +345,11 @@ export class Collection {
     assert(this.#nodes.length > 0, 'collection is empty')
     return this.#nodes.reduce((a, b) => (b.documentStartIndex < a.documentStartIndex ? b : a))
   }
+}
+
+/** Stringify a `code\`\`` interpolation: a `Collection` yields its (single-node) text. */
+function snippet(value: unknown): string {
+  return value instanceof Collection ? value.text : String(value)
 }
 
 /** The opening delimiter token (`[` / `{` / `(`) of a container node. */

@@ -187,3 +187,30 @@ describe('defineCodemod — functional mutation', () => {
     expect(t.transform('keep();\nmove();', {})).toBe('move();keep();\n')
   })
 })
+
+describe('defineCodemod — code builder', () => {
+  it('validates a snippet and feeds it to an insert', async () => {
+    const t = await defineCodemod((root) => {
+      const arr = root.find('array').first()
+      arr.append(arr.code`vue()`)
+    }).forTarget('tsx')
+    expect(t.transform('const x = [react()]', {})).toBe('const x = [react(), vue()]')
+  })
+
+  it('interpolates a Collection’s text', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('call_expression').forEach((call) => {
+        const name = call.field('function')
+        call.replaceWith(call.code`wrap(${name})`)
+      })
+    }).forTarget('tsx')
+    expect(t.transform('foo()', {})).toBe('wrap(foo)')
+  })
+
+  it('asserts on a malformed snippet instead of emitting it', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('array').first().append(root.code`vue(`)
+    }).forTarget('tsx')
+    expect(() => t.transform('const x = [a]', {})).toThrow(/invalid tsx snippet/)
+  })
+})

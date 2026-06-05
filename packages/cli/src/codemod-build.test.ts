@@ -62,6 +62,21 @@ describe('buildCodemod (compiled-mode parity)', () => {
     expect(compiled.transform(src, {})).toBe('const X = 2\n(foo())')
   })
 
+  it('serialises the code builder (validation runs in the emitted module)', async () => {
+    const codemod = defineCodemod((root) => {
+      const arr = root.find('array').first()
+      arr.append(arr.code`vue()`)
+    })
+    const codeDir = join(outDir, 'code')
+    await buildCodemod(codemod, ['tsx'], codeDir)
+    const compiled = await (await import(pathToFileURL(join(codeDir, 'tsx.js')).href)).transform.init()
+    const dev = await codemod.forTarget('tsx')
+
+    const src = 'const x = [react()]'
+    expect(compiled.transform(src, {})).toBe(dev.transform(src, {}))
+    expect(compiled.transform(src, {})).toBe('const x = [react(), vue()]')
+  })
+
   it('emitted module imports only @trast/core', async () => {
     const codemod = defineCodemod((root) => root.find('identifier', { text: 'a' }).replaceWith('b'))
     await buildCodemod(codemod, ['tsx'], outDir)
