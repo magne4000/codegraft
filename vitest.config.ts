@@ -13,6 +13,7 @@ export default defineConfig({
       { find: '@codegraft/core/internal', replacement: src('./packages/core/src/internal.ts') },
       { find: '@codegraft/core', replacement: src('./packages/core/src/index.ts') },
       { find: '@codegraft/codemod', replacement: src('./packages/codemod/src/index.ts') },
+      { find: '@codegraft/rules', replacement: src('./packages/rules/src/index.ts') },
       { find: '@codegraft/vue', replacement: src('./packages/vue/src/index.ts') },
       { find: '@codegraft/unplugin', replacement: src('./packages/unplugin/src/index.ts') },
     ],

@@ -1,0 +1,23 @@
+{
+  "name": "@codegraft/rules",
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@codegraft/codemod": "workspace:*",
+    "@codegraft/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@codegraft/vue": "workspace:*"
+  }
+}

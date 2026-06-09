@@ -8,6 +8,9 @@
       "path": "./packages/codemod"
     },
     {
+      "path": "./packages/rules"
+    },
+    {
       "path": "./packages/vue"
     },
     {

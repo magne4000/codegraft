@@ -17,11 +17,12 @@ Structural, build-time code transformation built on [tree-sitter](https://tree-s
 |---|---|
 | **`@codegraft/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, the `Collection`, scope `Resolver`, edit application (magic-string), `createCodemodTransformer`, `evaluate`. |
 | **`@codegraft/codemod`** | Authoring: `defineCodemod` — a jscodeshift-style collection API (find / navigate / edit / insert / scope). |
+| **`@codegraft/rules`** | Ready-made codemods — ESLint-rule-style transforms (e.g. `removeUnusedImports`). One self-contained rule per module, tree-shakeable. |
 | **`@codegraft/cli`** | `codegraft build` (compile a codemod to standalone modules) and `codegraft run` (apply to files). |
 | **`@codegraft/unplugin`** | Apply transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm. |
 | **`@codegraft/vue`** | `vueSplitter` — split a `.vue` SFC into `<template>`/`<script>`/`<style>` zones. |
 
-Dependency graph: `@codegraft/core ← @codegraft/codemod ← @codegraft/cli`, and `@codegraft/core ← {@codegraft/vue, @codegraft/unplugin}`.
+Dependency graph: `@codegraft/core ← @codegraft/codemod ← {@codegraft/cli, @codegraft/rules}`, and `@codegraft/core ← {@codegraft/vue, @codegraft/unplugin}`.
 
 ## The `$$` namespace
 
@@ -98,6 +99,26 @@ node.field('condition').evaluate(ctx) // e.g. $$.BATI.has("a") && !$$.BATI.has("
 ```
 
 A condition that isn't pure over the context (a runtime variable, an unsupported operator) asserts and names the offending node, rather than evaluating wrong.
+
+## Ready-made rules (`@codegraft/rules`)
+
+ESLint-rule-style transforms, authored with `defineCodemod` and shipped as a tree-shakeable library — one self-contained rule per module behind a named export, so importing one drops the rest. The first is `removeUnusedImports` (the analogue of `eslint-plugin-unused-imports` plus the import half of `@typescript-eslint/consistent-type-imports`): it removes imports with no reference, rewrites a value import used only in a type position into a type import (`import { Foo }` + `let v: Foo` → `import type { Foo }`), and removes unused `import type` too. It's **confident-or-abstain** — leaning on the scope resolver, it never removes a side-effect import (`import 'x'`) and abstains on a whole file it can't model (`with` / `eval` / a TS namespace / ambient module).
+
+A rule is grammar-agnostic — the same definition runs against any JS-family grammar and, through a `ZoneSplitter`, only the `<script>` of an SFC. You pick the targets when you apply it:
+
+```ts
+import { removeUnusedImports } from '@codegraft/rules'
+import { vueSplitter } from '@codegraft/vue'
+
+// programmatic / dev mode — one target at a time
+const transform = await removeUnusedImports.forTarget('tsx')      // JS / JSX / TS / TSX
+transform.transform(source, {})
+
+// Vue SFC — the splitter feeds the rule only the script zone
+const vue = await removeUnusedImports.forTarget(vueSplitter)
+```
+
+In a bundler, hand it to `@codegraft/unplugin` like any codemod (`{ codemod: removeUnusedImports, context: {}, splitters: [vueSplitter] }`); for `codegraft build`, re-export it with a `targets` array (`['javascript', 'tsx', vueSplitter]`). Because each rule body is param-rooted and self-contained, it compiles down the `codegraft build` path unchanged.
 
 ## Compared to other tools
 
