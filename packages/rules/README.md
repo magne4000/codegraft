@@ -35,13 +35,11 @@ transform.transform("import { Foo } from 'm'\nlet v: Foo", {})
 
 It works on every JS-family grammar (JS / JSX / TS / TSX) and, through a `ZoneSplitter`, the `<script>` of a Vue SFC.
 
-The rule module is also a ready codemod (default export + `targets: ['javascript', 'typescript', 'tsx']`), so the CLI runs it directly:
+The rule module is also a ready codemod (default export + `targets: ['javascript', 'typescript', 'tsx']`), so the CLI runs it directly — `.vue` `<script>` included, via the cli's built-in splitter:
 
 ```bash
-codegraft run "src/**/*.{ts,tsx}" --codemod @codegraft/rules/remove-unused-imports --in-place
+codegraft run "src/**/*.{ts,tsx,vue}" --codemod @codegraft/rules/remove-unused-imports --in-place
 ```
-
-For `.vue` files, wrap it in a codemod file that adds `vueSplitter` to `targets`.
 
 See the root [README](../../README.md#ready-made-rules-codegraftrules) for how to wire a rule into a bundler or `codegraft run`.
 

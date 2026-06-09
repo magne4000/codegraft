@@ -102,4 +102,37 @@ describe('run (glob + live codemod)', () => {
     expect(result.transformed).toEqual(['page.tsx'])
     expect(await readFile(join(work, 'page.tsx'), 'utf8')).toBe('a()')
   })
+
+  it('applies a tsx codemod to a .vue <script> via the built-in splitter', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'codegraft-run-vue-'))
+    const sfc = [
+      '<template>',
+      '  <h1>{{ title }}</h1>',
+      '</template>',
+      '',
+      '<script setup lang="ts">',
+      'const title = "App"',
+      `if ($$.flags.auth) {`,
+      '  a()',
+      '} else {',
+      '  b()',
+      '}',
+      '</script>',
+      '',
+    ].join('\n')
+    await writeFile(join(work, 'page.vue'), sfc)
+    const result = await run({
+      patterns: ['*.vue'],
+      cwd: work,
+      codemodPath: codemod, // targets only ['tsx'] — the cli adds the vue splitter
+      context: { flags: { auth: true } },
+      mode: { kind: 'in-place' },
+    })
+    expect(result.transformed).toEqual(['page.vue'])
+    const out = await readFile(join(work, 'page.vue'), 'utf8')
+    expect(out).toContain('a()')
+    expect(out).not.toContain('b()')
+    expect(out).not.toContain('$$')
+    expect(out).toContain('<h1>{{ title }}</h1>') // template untouched
+  })
 })

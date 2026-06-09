@@ -93,5 +93,5 @@ export const removeUnusedImports = defineCodemod((root) => {
 export default removeUnusedImports
 
 // Lets `codegraft run --codemod @codegraft/rules/remove-unused-imports` apply over `.js/.jsx/.ts/.tsx`
-// directly. A `.vue` refactor wraps it in a codemod file with `vueSplitter` added to `targets`.
+// directly; the cli adds the Vue splitter, so `.vue` `<script>` works too without declaring it here.
 export const targets: GrammarId[] = ['javascript', 'typescript', 'tsx']

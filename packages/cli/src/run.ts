@@ -3,6 +3,7 @@ import { dirname, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { GrammarId, LazyTransformer, Transformer, ZoneSplitter } from '@codegraft/core'
 import { assert, EXTENSION_GRAMMAR } from '@codegraft/core/internal'
+import { vueSplitter } from '@codegraft/vue'
 
 type Target = GrammarId | ZoneSplitter
 type TransformerMap = Record<string, LazyTransformer>
@@ -106,6 +107,9 @@ export async function run(opts: {
     const stem = typeof target === 'string' ? target : target.id
     transformers[stem] = { target, init: () => codemod.forTarget(target) }
   }
+  // The cli applies any codemod to `.vue` too — the splitter feeds it the SFC's zones and the
+  // codemod edits only the ones it matches (a JS-family rule touches `<script>`, a CSS rule `<style>`).
+  transformers.vue ??= { target: vueSplitter, init: () => codemod.forTarget(vueSplitter) }
 
   const files: string[] = []
   for await (const match of glob(opts.patterns, { cwd: opts.cwd })) files.push(match)
