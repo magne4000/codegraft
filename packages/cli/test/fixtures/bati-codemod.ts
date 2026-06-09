@@ -1,9 +1,7 @@
 import { defineCodemod } from '@codegraft/codemod'
 
-// A minimal Bati-style codemod for the build/run tests. The namespace is data-shaped
-// (`$$.flags.x`) so the context is JSON-serialisable — the form `codegraft run --context`
-// accepts — and the body is param-rooted (everything hangs off `root`/`ctx`), so it
-// serialises cleanly in compiled mode.
+// A minimal Bati-style codemod for the `codegraft run` tests. The namespace is data-shaped
+// (`$$.flags.x`) so the context is JSON-serialisable — the form `codegraft run --context` accepts.
 export default defineCodemod<{ flags: Record<string, boolean> }>({ namespace: '$$' }, (root, ctx) => {
   root.find('if_statement').forEach((node) => {
     const cond = node.field('condition')

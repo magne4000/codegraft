@@ -1,4 +1,4 @@
-import type { Collection } from '@codegraft/core'
+import type { Collection, GrammarId } from '@codegraft/core'
 import { defineCodemod } from '@codegraft/codemod'
 
 /**
@@ -91,3 +91,7 @@ export const removeUnusedImports = defineCodemod((root) => {
 })
 
 export default removeUnusedImports
+
+// Lets `codegraft run --codemod @codegraft/rules/remove-unused-imports` apply over `.js/.jsx/.ts/.tsx`
+// directly; the cli adds the Vue splitter, so `.vue` `<script>` works too without declaring it here.
+export const targets: GrammarId[] = ['javascript', 'typescript', 'tsx']

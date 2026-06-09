@@ -3,11 +3,14 @@
 The `codegraft` command line for [Codegraft](../../README.md).
 
 ```bash
-# Imports the codemod file and emits one transformer module per target (+ a barrel),
-# importing only @codegraft/core; prints the grammar packages the targets require.
-codegraft build <codemod-file> --output <dir>
-
-# Applies a compiled transformer to matched files (defaults to --dry-run).
-codegraft run <glob> --transformer <dist/index.js> --context <json> \
+# Apply a codemod to matched files (defaults to --dry-run). The codemod runs live — its helpers,
+# imports, and deps work as written, with no build step. A grammar target handles its extensions
+# (`tsx` → .tsx/.jsx, …); `.vue` is handled by the cli's built-in splitter (its <script>/<style>
+# zones), so any codemod applies to .vue without declaring it.
+codegraft run <glob...> --codemod <codemod-file> [--context <json>] \
   [--dry-run | --in-place | --out-dir <dir>]
 ```
+
+`--codemod` takes a path (`./rule.ts`) or a package specifier (`@codegraft/rules/remove-unused-imports`).
+The file must be importable by the running Node, so a `.ts` codemod needs a loader (Node's
+`--experimental-strip-types`, `tsx`, …) or ship it as `.js`.

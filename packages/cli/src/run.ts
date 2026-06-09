@@ -1,13 +1,22 @@
 import { glob, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, extname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { LazyTransformer, Transformer } from '@codegraft/core'
-import { EXTENSION_GRAMMAR } from '@codegraft/core/internal'
+import type { GrammarId, LazyTransformer, Transformer, ZoneSplitter } from '@codegraft/core'
+import { assert, EXTENSION_GRAMMAR } from '@codegraft/core/internal'
+import { vueSplitter } from '@codegraft/vue'
 
+type Target = GrammarId | ZoneSplitter
 type TransformerMap = Record<string, LazyTransformer>
 
-// File extension → barrel export stem: the shared grammar map plus SFC splitter stems.
+// File extension → target stem: the shared grammar map plus SFC splitter stems.
 const EXTENSION_TARGET: Record<string, string> = { ...EXTENSION_GRAMMAR, vue: 'vue' }
+
+/** What `codegraft run` needs from a codemod module: its `forTarget` (taken structurally, so the cli
+ *  needn't depend on `@codegraft/codemod`) and the `targets` it declares. */
+interface CodemodModule {
+  default: { forTarget(target: Target): Promise<Transformer> }
+  targets: Target[]
+}
 
 export type RunMode =
   | { kind: 'dry-run' } // report changes, write nothing
@@ -77,17 +86,31 @@ async function writeOutput(mode: RunMode, file: string, absolute: string, output
 }
 
 /**
- * `codegraft run`: resolve globs, load the compiled transformer barrel, and apply it.
- * Thin wrapper over {@link runFiles} that adds the I/O the CLI needs.
+ * `codegraft run`: load a codemod, resolve globs, and apply it. The codemod runs **live** — each
+ * declared target becomes a lazy transformer via `forTarget`, so the codemod's helpers, imports,
+ * and deps work as written, with no build/compile step.
  */
 export async function run(opts: {
   patterns: string[]
   cwd: string
-  transformerPath: string
+  codemodPath: string
   context: Record<string, unknown>
   mode: RunMode
 }): Promise<RunResult> {
-  const transformers = (await import(pathToFileURL(opts.transformerPath).href)) as TransformerMap
+  const mod = (await import(pathToFileURL(opts.codemodPath).href)) as Partial<CodemodModule>
+  const codemod = mod.default
+  assert(codemod && typeof codemod.forTarget === 'function', `codemod '${opts.codemodPath}' must default-export a defineCodemod result`)
+  assert(Array.isArray(mod.targets), `codemod '${opts.codemodPath}' must export a 'targets' array`)
+
+  const transformers: TransformerMap = {}
+  for (const target of mod.targets) {
+    const stem = typeof target === 'string' ? target : target.id
+    transformers[stem] = { target, init: () => codemod.forTarget(target) }
+  }
+  // The cli applies any codemod to `.vue` too — the splitter feeds it the SFC's zones and the
+  // codemod edits only the ones it matches (a JS-family rule touches `<script>`, a CSS rule `<style>`).
+  transformers.vue ??= { target: vueSplitter, init: () => codemod.forTarget(vueSplitter) }
+
   const files: string[] = []
   for await (const match of glob(opts.patterns, { cwd: opts.cwd })) files.push(match)
   return runFiles({ files, cwd: opts.cwd, transformers, context: opts.context, mode: opts.mode })

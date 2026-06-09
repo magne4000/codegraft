@@ -44,9 +44,6 @@ type TextArg<G extends GrammarId = GrammarId> = string | ((node: Collection<G>) 
  * The grammar parameter `G` types the node-type and field-name strings (`NodeTypeOf<G>` etc.) and
  * is carried through navigation. It defaults to every built-in grammar — annotate `root` (e.g.
  * `(root: Collection<'tsx'>) => …`) to narrow `find`/`field` to one grammar's vocabulary.
- *
- * Everything hangs off this object (and the run context), so a codemod's `.toString()` is
- * self-contained and serialises for `codegraft build` (§5 of the plan).
  */
 export class Collection<G extends GrammarId = GrammarId> {
   readonly #nodes: RichNode[]

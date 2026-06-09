@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises'
+import { describe, it, expect, beforeAll } from 'vitest'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createCodemodTransformer, type LazyTransformer } from '@codegraft/core'
 import { defineCodemod } from '@codegraft/codemod'
-import { build } from './build.js'
 import { runFiles, run } from './run.js'
 
 const IF_ELSE = 'if ($$.flags.auth) { a() } else { b() }'
@@ -87,28 +86,53 @@ describe('runFiles', () => {
   })
 })
 
-describe('run (glob + load)', () => {
-  const distDir = join(cliDir, '.tmp', 'run-dist')
-  beforeAll(async () => {
-    await rm(distDir, { recursive: true, force: true })
-    await mkdir(distDir, { recursive: true })
-    await build(join(cliDir, 'test', 'fixtures', 'bati-codemod.ts'), distDir)
-  })
-  afterAll(async () => {
-    await rm(distDir, { recursive: true, force: true })
-  })
+describe('run (glob + live codemod)', () => {
+  const codemod = join(cliDir, 'test', 'fixtures', 'bati-codemod.ts')
 
-  it('globs files, loads the compiled barrel, and applies it in place', async () => {
+  it('globs files, loads the codemod, and applies it in place', async () => {
     const work = await mkdtemp(join(tmpdir(), 'codegraft-run-glob-'))
     await writeFile(join(work, 'page.tsx'), IF_ELSE)
     const result = await run({
       patterns: ['*.tsx'],
       cwd: work,
-      transformerPath: join(distDir, 'index.js'),
+      codemodPath: codemod,
       context: { flags: { auth: true } },
       mode: { kind: 'in-place' },
     })
     expect(result.transformed).toEqual(['page.tsx'])
     expect(await readFile(join(work, 'page.tsx'), 'utf8')).toBe('a()')
+  })
+
+  it('applies a tsx codemod to a .vue <script> via the built-in splitter', async () => {
+    const work = await mkdtemp(join(tmpdir(), 'codegraft-run-vue-'))
+    const sfc = [
+      '<template>',
+      '  <h1>{{ title }}</h1>',
+      '</template>',
+      '',
+      '<script setup lang="ts">',
+      'const title = "App"',
+      `if ($$.flags.auth) {`,
+      '  a()',
+      '} else {',
+      '  b()',
+      '}',
+      '</script>',
+      '',
+    ].join('\n')
+    await writeFile(join(work, 'page.vue'), sfc)
+    const result = await run({
+      patterns: ['*.vue'],
+      cwd: work,
+      codemodPath: codemod, // targets only ['tsx'] — the cli adds the vue splitter
+      context: { flags: { auth: true } },
+      mode: { kind: 'in-place' },
+    })
+    expect(result.transformed).toEqual(['page.vue'])
+    const out = await readFile(join(work, 'page.vue'), 'utf8')
+    expect(out).toContain('a()')
+    expect(out).not.toContain('b()')
+    expect(out).not.toContain('$$')
+    expect(out).toContain('<h1>{{ title }}</h1>') // template untouched
   })
 })

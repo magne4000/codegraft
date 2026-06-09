@@ -18,9 +18,8 @@ export interface CodemodConfig {
 }
 
 /**
- * Authoring handle for a codemod. `forTarget` builds an interpreted transformer; `fn`/`namespace`
- * are read by `codegraft build` for compiled mode. Because the body is param-rooted (everything hangs
- * off `root`/`context`), `fn.toString()` is self-contained and serialises.
+ * Authoring handle for a codemod. `forTarget` builds a transformer for one target; `codegraft run`
+ * and `@codegraft/unplugin` call it to apply the codemod live (no build step).
  *
  * `G` is the grammar the body was authored against (inferred from a `root: Collection<'tsx'>`
  * annotation, else every built-in grammar); it ties `forTarget` to a matching bare-grammar target.

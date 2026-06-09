@@ -1,8 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { vueSplitter } from '@codegraft/vue'
-import { removeUnusedImports } from './remove-unused-imports.js'
+import codemodDefault, { removeUnusedImports, targets } from './remove-unused-imports.js'
 
 const on = (target: Parameters<typeof removeUnusedImports.forTarget>[0]) => removeUnusedImports.forTarget(target)
+
+describe('removeUnusedImports — codegraft-run shape', () => {
+  it('default-exports the codemod and declares JS-family targets', async () => {
+    expect(codemodDefault).toBe(removeUnusedImports)
+    expect(targets).toEqual(['javascript', 'typescript', 'tsx'])
+    // the shape `codegraft run` consumes: forTarget(target) yields a working transformer
+    const transform = await codemodDefault.forTarget('typescript')
+    expect(transform.transform("import { a } from 'm'\nb()", {})).toBe('\nb()')
+  })
+})
 
 describe('removeUnusedImports — whole-statement removal', () => {
   it('drops a fully-unused named import', async () => {
