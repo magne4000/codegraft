@@ -3,37 +3,17 @@ import { parseArgs } from 'node:util'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { assert } from '@codegraft/core/internal'
-import { build } from './build.js'
 import { run, type RunMode } from './run.js'
 
 const USAGE = `usage:
-  codegraft build <codemod-file> --output <dir>
-  codegraft run <glob...> --transformer <dist/index.js> [--context <json>] [--dry-run | --in-place | --out-dir <dir>]`
+  codegraft run <glob...> --codemod <codemod-file> [--context <json>] [--dry-run | --in-place | --out-dir <dir>]`
 
 /** Dispatch a `codegraft` invocation. Exported (with an injectable `cwd`) so it is testable
  *  without spawning a process; the bin auto-runs it only when invoked directly. */
 export async function main(argv: string[], cwd: string = process.cwd()): Promise<void> {
   const [command, ...rest] = argv
-  if (command === 'build') return cmdBuild(rest, cwd)
   if (command === 'run') return cmdRun(rest, cwd)
   throw new Error(`unknown command '${command ?? ''}'\n${USAGE}`)
-}
-
-async function cmdBuild(args: string[], cwd: string): Promise<void> {
-  const { values, positionals } = parseArgs({
-    args,
-    allowPositionals: true,
-    options: { output: { type: 'string', short: 'o' } },
-  })
-  const [codemodFile] = positionals
-  assert(codemodFile, `codegraft build: missing <codemod-file>\n${USAGE}`)
-  const outputDir = resolve(cwd, values.output ?? 'dist')
-
-  const result = await build(resolve(cwd, codemodFile), outputDir)
-  process.stdout.write(`codegraft build: wrote ${result.files.join(', ')} to ${outputDir}\n`)
-  if (result.grammarPackages.length > 0) {
-    process.stdout.write(`codegraft build: targets require ${result.grammarPackages.join(', ')}\n`)
-  }
 }
 
 async function cmdRun(args: string[], cwd: string): Promise<void> {
@@ -41,15 +21,15 @@ async function cmdRun(args: string[], cwd: string): Promise<void> {
     args,
     allowPositionals: true,
     options: {
-      transformer: { type: 'string', short: 't' },
-      context: { type: 'string', short: 'c' },
+      codemod: { type: 'string', short: 'c' },
+      context: { type: 'string' },
       'dry-run': { type: 'boolean' },
       'in-place': { type: 'boolean' },
       'out-dir': { type: 'string' },
     },
   })
   assert(positionals.length > 0, `codegraft run: missing <glob>\n${USAGE}`)
-  assert(values.transformer, `codegraft run: missing --transformer <dist/index.js>\n${USAGE}`)
+  assert(values.codemod, `codegraft run: missing --codemod <codemod-file>\n${USAGE}`)
 
   const modes = [values['dry-run'], values['in-place'], values['out-dir'] !== undefined].filter(Boolean)
   assert(modes.length <= 1, 'codegraft run: choose at most one of --dry-run, --in-place, --out-dir')
@@ -62,7 +42,7 @@ async function cmdRun(args: string[], cwd: string): Promise<void> {
   const result = await run({
     patterns: positionals,
     cwd,
-    transformerPath: resolve(cwd, values.transformer),
+    codemodPath: resolve(cwd, values.codemod),
     context: values.context ? (JSON.parse(values.context) as Record<string, unknown>) : {},
     mode,
   })

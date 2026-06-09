@@ -2,7 +2,7 @@ import type { RichNode } from './types.js'
 import { assert } from './assert.js'
 
 // TypeScript type-position navigation, so a rewrite needn't know tree-sitter field
-// names. Public; `codegraft build` imports any a rewrite references (§8).
+// names. Public helpers a codemod body can call.
 
 export function getPropertySignatures(objectType: RichNode): RichNode[] {
   return objectType.children.filter((child) => child.type === 'property_signature')

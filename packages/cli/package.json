@@ -10,7 +10,9 @@
     "build": "tsc -b"
   },
   "dependencies": {
-    "@codegraft/codemod": "workspace:*",
     "@codegraft/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@codegraft/codemod": "workspace:*"
   }
 }

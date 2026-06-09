@@ -2,7 +2,7 @@
 
 Ready-made codemods — ESLint-rule-style transforms authored with [`@codegraft/codemod`](../codemod) and the `@codegraft/core` scope resolver.
 
-Each rule lives in its own module, is re-exported by name from the barrel, and the package is `"sideEffects": false` — so a consumer that imports one rule tree-shakes the rest. Every rule body is **param-rooted and self-contained**, so it runs interpreted (`forTarget`), through `@codegraft/unplugin`, and down the `codegraft build` compile path unchanged. (`build-serialisation.test.ts` enforces that invariant.)
+Each rule lives in its own module, is re-exported by name from the barrel, and the package is `"sideEffects": false` — so a consumer that imports one rule tree-shakes the rest. Every rule runs live via `forTarget` — directly, through `@codegraft/unplugin`, or `codegraft run`.
 
 ## Rules
 
@@ -35,10 +35,10 @@ transform.transform("import { Foo } from 'm'\nlet v: Foo", {})
 
 It works on every JS-family grammar (JS / JSX / TS / TSX) and, through a `ZoneSplitter`, the `<script>` of a Vue SFC.
 
-See the root [README](../../README.md#ready-made-rules-codegraftrules) for how to wire a rule into a bundler or `codegraft build`.
+See the root [README](../../README.md#ready-made-rules-codegraftrules) for how to wire a rule into a bundler or `codegraft run`.
 
 ## Adding a rule
 
-1. Add `src/<rule-name>.ts` exporting a `defineCodemod(...)` result. Keep the body self-contained — no module-scope helpers, since `codegraft build` serialises only `fn.toString()`.
+1. Add `src/<rule-name>.ts` exporting a `defineCodemod(...)` result.
 2. Re-export it from `src/index.ts`.
 3. Add `src/<rule-name>.test.ts`, covering each grammar you support plus the `vueSplitter` path and the abstain cases.

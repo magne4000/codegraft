@@ -19,8 +19,6 @@ type RawZone = { language: GrammarId; source: string; startOffset: number }
 export const vueSplitter: ZoneSplitter = {
   id: 'vue',
   grammars: ['html', 'typescript', 'tsx', 'javascript', 'css'],
-  importName: 'vueSplitter',
-  importPath: '@codegraft/vue',
 
   async init(): Promise<void> {
     await Parser.loadGrammar(VUE_GRAMMAR, VUE_WASM)
