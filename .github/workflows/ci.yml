@@ -22,6 +22,12 @@ jobs:
       # Grammar .wasm files ship in the npm tarballs, so native build scripts aren't needed.
       - run: pnpm install --frozen-lockfile --ignore-scripts
 
+      # The generated node-type unions must match the installed grammars; fail if a regen is owed.
+      - name: Generated node types are up to date
+        run: |
+          pnpm --filter @codegraft/core regen-node-types
+          git diff --exit-code packages/core/src/generated/node-types.ts
+
       - run: pnpm build
 
       - run: pnpm test

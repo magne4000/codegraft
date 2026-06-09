@@ -11,7 +11,9 @@
 set -euo pipefail
 
 ref="${1:-v0.23.2}"
-wasm="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/wasm"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+wasm="$root/wasm"
+vendor="$root/vendor"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -25,5 +27,8 @@ cd "$tmp"/tree-sitter-typescript-*
 for grammar in typescript tsx; do
   (cd "$grammar" && npx --yes tree-sitter-cli@0.26.9 generate src/grammar.json)
   npx --yes tree-sitter-cli@0.26.9 build --wasm "$grammar" -o "$wasm/tree-sitter-${grammar}.wasm"
+  # Vendor node-types.json from the same source, so `regen-node-types` types the grammar the wasm parses.
+  cp "$grammar/src/node-types.json" "$vendor/tree-sitter-${grammar}.node-types.json"
 done
-echo "wrote $wasm/tree-sitter-typescript.wasm and tree-sitter-tsx.wasm"
+echo "wrote wasm + node-types.json for typescript and tsx"
+echo "now run: pnpm --filter @codegraft/core regen-node-types"

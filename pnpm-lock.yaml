@@ -56,6 +56,19 @@ importers:
         specifier: ^0.25.0
         version: 0.25.0
 
+  packages/rules:
+    dependencies:
+      '@codegraft/codemod':
+        specifier: workspace:*
+        version: link:../codemod
+      '@codegraft/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@codegraft/vue':
+        specifier: workspace:*
+        version: link:../vue
+
   packages/unplugin:
     dependencies:
       '@codegraft/core':

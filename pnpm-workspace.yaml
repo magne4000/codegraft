@@ -1,2 +1,7 @@
 packages:
   - 'packages/*'
+allowBuilds:
+  esbuild: true
+  tree-sitter-css: true
+  tree-sitter-html: true
+  tree-sitter-javascript: true
