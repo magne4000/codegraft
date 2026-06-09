@@ -1,6 +1,7 @@
 // The contract every other file in @codegraft/core (and the @codegraft/codemod / @codegraft/cli
-// packages downstream) implements against. No imports: this module is the root of
-// the type graph and must stay dependency-free.
+// packages downstream) implements against. The only import is the generated, leaf node-type
+// module (it imports nothing back, so this stays the near-root of the type graph).
+import type { NodeTypeAll, FieldName } from './generated/node-types.js'
 
 /** A real tree-sitter grammar. There is no id for SFC file formats — those are
  *  handled by a {@link ZoneSplitter}, which maps each section to one of these. */
@@ -47,7 +48,7 @@ export interface ZoneSplitter {
  * absolute — so edits, always in document space, never need remapping.
  */
 export interface RichNode {
-  readonly type: string
+  readonly type: NodeTypeAll
   readonly isNamed: boolean
   readonly text: string
   /** Byte offset in the *zone* source. */
@@ -61,8 +62,8 @@ export interface RichNode {
   readonly children: RichNode[]
   /** Full CST: every child, including punctuation and comment nodes. */
   readonly allChildren: RichNode[]
-  child(field: string): RichNode | null
-  childrenForField(field: string): RichNode[]
+  child(field: FieldName): RichNode | null
+  childrenForField(field: FieldName): RichNode[]
   readonly leadingComments: RichNode[]
   readonly trailingComments: RichNode[]
   readonly innerComments: RichNode[]

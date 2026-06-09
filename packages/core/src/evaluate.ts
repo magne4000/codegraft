@@ -1,4 +1,5 @@
 import type { RichNode } from './types.js'
+import type { FieldName } from './generated/node-types.js'
 import { Parser } from './parser.js'
 import { wrapNode } from './rich-node.js'
 import { assert } from './assert.js'
@@ -92,7 +93,7 @@ function evalBinary(node: RichNode, context: unknown): unknown {
   }
 }
 
-function field(node: RichNode, name: string): RichNode {
+function field(node: RichNode, name: FieldName): RichNode {
   const child = node.child(name)
   assert(child, `${node.type} is missing field '${name}'`)
   return child

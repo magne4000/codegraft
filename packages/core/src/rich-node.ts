@@ -1,5 +1,6 @@
 import type { Node } from 'web-tree-sitter'
 import type { GrammarId, Point, RichNode } from './types.js'
+import type { NodeTypeAll, FieldName } from './generated/node-types.js'
 import { COMMENT_TYPES } from './comment-attachment.js'
 import { assert } from './assert.js'
 
@@ -32,8 +33,9 @@ class RichNodeImpl implements RichNode {
     this.#parent = parent
   }
 
-  get type(): string {
-    return this.#node.type
+  get type(): NodeTypeAll {
+    // The grammar guarantees the raw string is one of its node types; assert it into the union.
+    return this.#node.type as NodeTypeAll
   }
   get isNamed(): boolean {
     return this.#node.isNamed
@@ -76,12 +78,12 @@ class RichNodeImpl implements RichNode {
     return this.#children
   }
 
-  child(field: string): RichNode | null {
+  child(field: FieldName): RichNode | null {
     const target = this.#node.childForFieldName(field)
     return target === null ? null : this.#wrapperFor(target, field)
   }
 
-  childrenForField(field: string): RichNode[] {
+  childrenForField(field: FieldName): RichNode[] {
     return this.#node
       .childrenForFieldName(field)
       .filter((n): n is Node => n !== null)

@@ -6,6 +6,7 @@ import type {
   Zone,
   ZoneSplitter,
 } from './types.js'
+import type { FieldName, NodeTypeOf, NodeTypeAllOf, FieldNameOf } from './generated/node-types.js'
 import { Parser } from './parser.js'
 import { splitAndParse } from './zone-splitter.js'
 import { attachComments } from './comment-attachment.js'
@@ -25,10 +26,13 @@ interface Session {
  *  (`RegExp`), recurses into the field child (a nested `{ … }` of more matchers), or is an
  *  escape-hatch predicate over the whole node (`function`). The pseudo-key `text` matches the
  *  node's own text rather than a field. */
-type AttrMatcher = string | RegExp | ((node: RichNode) => boolean) | { [field: string]: AttrMatcher }
+type AttrMatcher<G extends GrammarId = GrammarId> = string | RegExp | ((node: RichNode) => boolean) | AttrMatchers<G>
+/** Field-keyed matchers (the `text` pseudo-key matches the node's own text). The mapped type is a
+ *  deferred position, so the recursion through {@link AttrMatcher} resolves rather than cycling. */
+type AttrMatchers<G extends GrammarId = GrammarId> = { [K in FieldNameOf<G> | 'text']?: AttrMatcher<G> }
 
 /** A replacement text, or a function deriving it from the (single-node) Collection being edited. */
-type TextArg = string | ((node: Collection) => string)
+type TextArg<G extends GrammarId = GrammarId> = string | ((node: Collection<G>) => string)
 
 /**
  * A jscodeshift-style selection of CST nodes bound to one transform run. Query methods
@@ -37,10 +41,14 @@ type TextArg = string | ((node: Collection) => string)
  * accessors (`node`/`text`/`type`/`field`/`evaluate`) assert the collection holds exactly one
  * node — the shape you get inside `forEach`, after `first()`/`at()`, or from `field()`.
  *
+ * The grammar parameter `G` types the node-type and field-name strings (`NodeTypeOf<G>` etc.) and
+ * is carried through navigation. It defaults to every built-in grammar — annotate `root` (e.g.
+ * `(root: Collection<'tsx'>) => …`) to narrow `find`/`field` to one grammar's vocabulary.
+ *
  * Everything hangs off this object (and the run context), so a codemod's `.toString()` is
  * self-contained and serialises for `codegraft build` (§5 of the plan).
  */
-export class Collection {
+export class Collection<G extends GrammarId = GrammarId> {
   readonly #nodes: RichNode[]
   readonly #session: Session
 
@@ -53,7 +61,7 @@ export class Collection {
 
   /** Descendants (not self) of node type `type` — a concrete type or a grammar supertype
    *  (e.g. `expression`), optionally filtered by field predicates. */
-  find(type: string, attrs?: Record<string, AttrMatcher>): Collection {
+  find(type: NodeTypeOf<G>, attrs?: AttrMatchers<G>): Collection<G> {
     const out: RichNode[] = []
     const seen = new Set<RichNode>()
     const walk = (node: RichNode): void => {
@@ -69,38 +77,38 @@ export class Collection {
     return this.#select(out)
   }
 
-  filter(predicate: (node: Collection) => boolean): Collection {
-    return this.#select(this.#nodes.filter((n) => predicate(new Collection([n], this.#session))))
+  filter(predicate: (node: Collection<G>) => boolean): Collection<G> {
+    return this.#select(this.#nodes.filter((n) => predicate(new Collection<G>([n], this.#session))))
   }
 
   /** Nearest ancestor (not self) of `type` — concrete or a grammar supertype — per selected node. */
-  closest(type: string): Collection {
+  closest(type: NodeTypeOf<G>): Collection<G> {
     return this.#select(dedupe(this.#nodes.map((n) => ancestorOfType(n, type)).filter(present)))
   }
 
-  parent(): Collection {
+  parent(): Collection<G> {
     return this.#select(dedupe(this.#nodes.map((n) => n.parent).filter(present)))
   }
 
-  children(): Collection {
+  children(): Collection<G> {
     return this.#select(this.#nodes.flatMap((n) => n.children))
   }
 
   /** All named siblings of each selected node (excluding itself). */
-  siblings(): Collection {
+  siblings(): Collection<G> {
     return this.#select(dedupe(this.#nodes.flatMap((n) => n.parent?.children.filter((c) => c !== n) ?? [])))
   }
 
-  nextSibling(): Collection {
+  nextSibling(): Collection<G> {
     return this.#select(this.#nodes.map((n) => siblingAt(n, 1)).filter(present))
   }
 
-  prevSibling(): Collection {
+  prevSibling(): Collection<G> {
     return this.#select(this.#nodes.map((n) => siblingAt(n, -1)).filter(present))
   }
 
   /** Every ancestor of each selected node (innermost first), optionally of node type `type`. */
-  ancestors(type?: string): Collection {
+  ancestors(type?: NodeTypeOf<G>): Collection<G> {
     const out: RichNode[] = []
     for (const n of this.#nodes) {
       for (let cur = n.parent; cur; cur = cur.parent) if (!type || isType(cur, type)) out.push(cur)
@@ -109,15 +117,15 @@ export class Collection {
   }
 
   /** Nearest enclosing scope (ancestor-or-self): a function, block, loop, catch, or the program. */
-  closestScope(): Collection {
+  closestScope(): Collection<G> {
     return this.#select(dedupe(this.#nodes.map(scopeOf).filter(present)))
   }
 
-  first(): Collection {
+  first(): Collection<G> {
     return this.#select(this.#nodes.slice(0, 1))
   }
 
-  at(index: number): Collection {
+  at(index: number): Collection<G> {
     const node = this.#nodes.at(index)
     return this.#select(node ? [node] : [])
   }
@@ -126,13 +134,13 @@ export class Collection {
     return this.#nodes.length
   }
 
-  forEach(fn: (node: Collection) => void): this {
-    for (const node of this.#nodes) fn(new Collection([node], this.#session))
+  forEach(fn: (node: Collection<G>) => void): this {
+    for (const node of this.#nodes) fn(new Collection<G>([node], this.#session))
     return this
   }
 
-  map<T>(fn: (node: Collection) => T): T[] {
-    return this.#nodes.map((node) => fn(new Collection([node], this.#session)))
+  map<T>(fn: (node: Collection<G>) => T): T[] {
+    return this.#nodes.map((node) => fn(new Collection<G>([node], this.#session)))
   }
 
   nodes(): RichNode[] {
@@ -140,7 +148,7 @@ export class Collection {
   }
 
   /** Whether every selected node is of `type` (concrete or supertype); false for an empty selection. */
-  isOfType(type: string): boolean {
+  isOfType(type: NodeTypeOf<G>): boolean {
     return this.#nodes.length > 0 && this.#nodes.every((n) => isType(n, type))
   }
 
@@ -157,12 +165,12 @@ export class Collection {
   get text(): string {
     return this.#single().text
   }
-  get type(): string {
-    return this.#single().type
+  get type(): NodeTypeAllOf<G> {
+    return this.#single().type as NodeTypeAllOf<G>
   }
   /** The field child as a (0-or-1) Collection, e.g. `node.field('condition')`. */
-  field(name: string): Collection {
-    const child = this.#single().child(name)
+  field(name: FieldNameOf<G>): Collection<G> {
+    const child = this.#single().child(name as FieldName)
     return this.#select(child ? [child] : [])
   }
   /** Evaluate this node as a build-time expression against `context` (see core `evaluate`). */
@@ -174,28 +182,28 @@ export class Collection {
 
   /** Every occurrence (declaration + references) of the binding this node declares, or `null`
    *  when not confidently resolvable — the safe signal to skip a rename. */
-  references(): Collection | null {
+  references(): Collection<G> | null {
     const node = this.#single()
     const refs = this.#session.resolver(node)?.references(node)
     return refs ? this.#select(refs) : null
   }
 
   /** The declaration this reference resolves to, or `null` for a global / when uncertain. */
-  definition(): Collection | null {
+  definition(): Collection<G> | null {
     const node = this.#single()
     const def = this.#session.resolver(node)?.definition(node)
     return def ? this.#select([def]) : null
   }
 
   /** The declaration `name` resolves to from this node's position; `null` for a global / abstain. */
-  lookup(name: string): Collection | null {
+  lookup(name: string): Collection<G> | null {
     const node = this.#single()
     const decl = this.#session.resolver(node)?.lookup(node, name)
     return decl ? this.#select([decl]) : null
   }
 
   /** Every binding visible at this node (inner shadows outer), or `null` when abstaining. */
-  bindingsInScope(): Collection | null {
+  bindingsInScope(): Collection<G> | null {
     const node = this.#single()
     const bindings = this.#session.resolver(node)?.bindingsInScope(node)
     return bindings ? this.#select(bindings) : null
@@ -217,7 +225,7 @@ export class Collection {
   // ---- edits ----
 
   /** Replace each selected node with `text`, or with the string a callback derives from it. */
-  replaceWith(text: TextArg): this {
+  replaceWith(text: TextArg<G>): this {
     for (const node of this.#nodes) {
       this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, this.#text(text, node))
     }
@@ -226,9 +234,9 @@ export class Collection {
 
   /** Overwrite a field child's text (literal or derived from its current text); no-op where the
    *  field is absent, mirroring `field()` returning an empty selection. */
-  setField(name: string, text: string | ((current: string) => string)): this {
+  setField(name: FieldNameOf<G>, text: string | ((current: string) => string)): this {
     for (const node of this.#nodes) {
-      const field = node.child(name)
+      const field = node.child(name as FieldName)
       if (!field) continue
       const next = typeof text === 'function' ? text(field.text) : text
       this.#session.collector.overwrite(field.documentStartIndex, field.documentEndIndex, next)
@@ -250,7 +258,7 @@ export class Collection {
    * (this is what lets nested conditionals collapse in one pass). Empty `keep` removes the whole
    * node.
    */
-  unwrap(keep: Collection): this {
+  unwrap(keep: Collection<G>): this {
     const wrapper = this.#single()
     const kept = keep.#nodes
     if (kept.length === 0) {
@@ -265,13 +273,13 @@ export class Collection {
   // ---- insertion ----
 
   /** Insert `text` (literal or derived per node) immediately before each selected node. */
-  insertBefore(text: TextArg): this {
+  insertBefore(text: TextArg<G>): this {
     for (const node of this.#nodes) this.#session.collector.insertLeft(node.documentStartIndex, this.#text(text, node))
     return this
   }
 
   /** Insert `text` (literal or derived per node) immediately after each selected node. */
-  insertAfter(text: TextArg): this {
+  insertAfter(text: TextArg<G>): this {
     for (const node of this.#nodes) this.#session.collector.insertRight(node.documentEndIndex, this.#text(text, node))
     return this
   }
@@ -310,7 +318,7 @@ export class Collection {
    *  exists. Placed after the last existing import, else before the first node. */
   ensureImport(statement: string): this {
     const source = importSource(statement)
-    const imports = this.find('import_statement').#nodes
+    const imports = this.find('import_statement' as NodeTypeOf<G>).#nodes
     if (imports.some((imp) => importSource(imp.text) === source)) return this
     if (imports.length === 0) return this.prependToFile(statement + '\n')
     this.#session.collector.insertRight(imports[imports.length - 1].documentEndIndex, '\n' + statement)
@@ -324,12 +332,12 @@ export class Collection {
   }
 
   /** Move this node's text to just before `target` (delete here, re-insert there). */
-  moveBefore(target: Collection): this {
+  moveBefore(target: Collection<G>): this {
     return this.#move(target, (dest, text) => this.#session.collector.insertLeft(dest.documentStartIndex, text))
   }
 
   /** Move this node's text to just after `target`. */
-  moveAfter(target: Collection): this {
+  moveAfter(target: Collection<G>): this {
     return this.#move(target, (dest, text) => this.#session.collector.insertRight(dest.documentEndIndex, text))
   }
 
@@ -397,11 +405,11 @@ export class Collection {
 
   // ---- internals ----
 
-  #text(arg: TextArg, node: RichNode): string {
-    return typeof arg === 'function' ? arg(new Collection([node], this.#session)) : arg
+  #text(arg: TextArg<G>, node: RichNode): string {
+    return typeof arg === 'function' ? arg(new Collection<G>([node], this.#session)) : arg
   }
   /** Capture this node's text, delete it, and re-insert it at `target` via `place`. */
-  #move(target: Collection, place: (dest: RichNode, text: string) => void): this {
+  #move(target: Collection<G>, place: (dest: RichNode, text: string) => void): this {
     const node = this.#single()
     const dest = target.#single()
     assert(
@@ -414,8 +422,8 @@ export class Collection {
     return this
   }
 
-  #select(nodes: RichNode[]): Collection {
-    return new Collection(nodes, this.#session)
+  #select(nodes: RichNode[]): Collection<G> {
+    return new Collection<G>(nodes, this.#session)
   }
   #single(): RichNode {
     assert(this.#nodes.length === 1, `expected a single node, got ${this.#nodes.length}`)
@@ -452,25 +460,27 @@ function importSource(statementText: string): string | null {
   return match ? match[1] : null
 }
 
-function matches(node: RichNode, attrs?: Record<string, AttrMatcher>): boolean {
+function matches<G extends GrammarId>(node: RichNode, attrs?: AttrMatchers<G>): boolean {
   if (!attrs) return true
-  for (const [key, matcher] of Object.entries(attrs)) {
+  for (const [key, matcher] of Object.entries(attrs) as [string, AttrMatcher<G> | undefined][]) {
+    if (matcher === undefined) continue
     if (typeof matcher === 'function') {
       if (!matcher(node)) return false
     } else if (matcher instanceof RegExp) {
       if (!matcher.test(fieldText(node, key))) return false
-    } else if (typeof matcher === 'object') {
-      const child = node.child(key) // nested: descend into the field child
+    } else if (typeof matcher === 'string') {
+      if (fieldText(node, key) !== matcher) return false
+    } else {
+      const child = node.child(key as FieldName) // nested matchers: descend into the field child
       if (!child || !matches(child, matcher)) return false
-    } else if (fieldText(node, key) !== matcher) {
-      return false
     }
   }
   return true
 }
 
+// `key` is a field name or the `text` pseudo-key; only the field branch needs the FieldName cast.
 function fieldText(node: RichNode, key: string): string {
-  return key === 'text' ? node.text : (node.child(key)?.text ?? '')
+  return key === 'text' ? node.text : (node.child(key as FieldName)?.text ?? '')
 }
 
 /** Match a node by concrete type or by a grammar supertype (e.g. `expression`). */
@@ -532,9 +542,12 @@ function rootOf(node: RichNode): RichNode {
  * `namespace` opts into the scan-gate (a source not mentioning it is returned untouched,
  * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form.
  */
-export function createCodemodTransformer<Ctx extends Record<string, unknown> = Record<string, unknown>>(
+export function createCodemodTransformer<
+  Ctx extends Record<string, unknown> = Record<string, unknown>,
+  G extends GrammarId = GrammarId,
+>(
   target: GrammarId | ZoneSplitter,
-  codemod: (root: Collection, context: Ctx) => void,
+  codemod: (root: Collection<G>, context: Ctx) => void,
   options?: { namespace?: string },
 ): LazyTransformer<Ctx> {
   const namespace = options?.namespace
@@ -562,7 +575,7 @@ export function createCodemodTransformer<Ctx extends Record<string, unknown> = R
           return resolvers.get(treeRoot) ?? null
         },
       }
-      codemod(new Collection(zones.map((zone) => zone.tree), session), context)
+      codemod(new Collection<G>(zones.map((zone) => zone.tree), session), context)
       return collector
     }
 
