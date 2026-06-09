@@ -20,12 +20,16 @@ importers:
 
   packages/cli:
     dependencies:
-      '@codegraft/codemod':
-        specifier: workspace:*
-        version: link:../codemod
       '@codegraft/core':
         specifier: workspace:*
         version: link:../core
+      '@codegraft/vue':
+        specifier: workspace:*
+        version: link:../vue
+    devDependencies:
+      '@codegraft/codemod':
+        specifier: workspace:*
+        version: link:../codemod
 
   packages/codemod:
     dependencies:
