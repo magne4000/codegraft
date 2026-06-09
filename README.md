@@ -134,7 +134,13 @@ transform.transform(source, {})
 const vue = await removeUnusedImports.forTarget(vueSplitter)
 ```
 
-In a bundler, hand it to `@codegraft/unplugin` like any codemod (`{ codemod: removeUnusedImports, context: {}, splitters: [vueSplitter] }`); from the CLI, wrap it in a codemod file (`export default removeUnusedImports; export const targets = ['javascript', 'tsx', vueSplitter]`) and `codegraft run` it over your source.
+Each rule is also a ready codemod module (default export + JS-family `targets`), so the CLI applies it directly over your source — no wrapper:
+
+```bash
+codegraft run "src/**/*.{ts,tsx}" --codemod @codegraft/rules/remove-unused-imports --in-place
+```
+
+In a bundler, hand it to `@codegraft/unplugin` like any codemod (`{ codemod: removeUnusedImports, context: {}, splitters: [vueSplitter] }`). For `.vue` files, wrap it in a codemod file adding `vueSplitter` to `targets`.
 
 ## Compared to other tools
 

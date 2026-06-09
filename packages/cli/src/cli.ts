@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { isAbsolute, join, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { assert } from '@codegraft/core/internal'
 import { run, type RunMode } from './run.js'
 
@@ -42,13 +42,20 @@ async function cmdRun(args: string[], cwd: string): Promise<void> {
   const result = await run({
     patterns: positionals,
     cwd,
-    codemodPath: resolve(cwd, values.codemod),
+    codemodPath: resolveCodemod(values.codemod, cwd),
     context: values.context ? (JSON.parse(values.context) as Record<string, unknown>) : {},
     mode,
   })
   process.stdout.write(
     `codegraft run: ${result.transformed.length} transformed, ${result.unchanged.length} unchanged, ${result.skipped.length} skipped\n`,
   )
+}
+
+/** A `--codemod` value is a path (`./rule.ts`, absolute) resolved against `cwd`, or a package
+ *  specifier (`@codegraft/rules/remove-unused-imports`) resolved from `cwd`'s node_modules. */
+function resolveCodemod(value: string, cwd: string): string {
+  if (value.startsWith('.') || isAbsolute(value)) return resolve(cwd, value)
+  return fileURLToPath(import.meta.resolve(value, pathToFileURL(join(cwd, '_.js')).href))
 }
 
 // Auto-run only when this file is the process entry point (not when imported by tests).
