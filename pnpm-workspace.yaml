@@ -1,5 +1,15 @@
 packages:
   - 'packages/*'
+supportedArchitectures:
+  os:
+    - current
+    - linux
+  cpu:
+    - current
+    - arm64
+  libc:
+    - current
+    - glibc
 allowBuilds:
   esbuild: true
   tree-sitter-css: true
