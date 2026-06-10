@@ -178,6 +178,52 @@ describe('removeUnusedImports — confident-or-abstain (no-op)', () => {
   })
 })
 
+describe('removeUnusedImports — abstaining constructs (syntactic fallback)', () => {
+  it('prunes around a TS namespace the resolver abstains on', async () => {
+    const t = await on('typescript')
+    // The nested `namespace` makes the resolver abstain; the scan still sees `dbSqlite` via `typeof`.
+    const src = [
+      'import { dbSqlite, dbD1 } from "x"',
+      'declare global {',
+      '  namespace V { interface C { db: ReturnType<typeof dbSqlite> } }',
+      '}',
+    ].join('\n')
+    const out = t.transform(src, {})
+    expect(out).toContain('import { dbSqlite } from "x"')
+    expect(out).not.toContain('dbD1')
+    expect(out).toContain('namespace V') // ambient block untouched
+  })
+
+  it('prunes around a `declare module` block', async () => {
+    const t = await on('typescript')
+    const src = 'import { used, unused } from "m"\ndeclare module "y" { export const z: ReturnType<typeof used> }'
+    const out = t.transform(src, {})
+    expect(out).toContain('import { used } from "m"')
+    expect(out).not.toContain('unused')
+  })
+
+  it('counts a value-shorthand reference as a use under the fallback', async () => {
+    const t = await on('typescript')
+    // `kept` is used only via object shorthand (`{ kept }`); `gone` is genuinely unused.
+    const src = 'import { kept, gone } from "m"\nnamespace V { export const z = 1 }\nconst o = { kept }'
+    const out = t.transform(src, {})
+    expect(out).toContain('import { kept } from "m"')
+    expect(out).not.toContain('gone')
+  })
+
+  it('still abstains when `with` accompanies a namespace', async () => {
+    const t = await on('typescript')
+    const src = 'import { foo } from "m"\nnamespace V { export const z = 1 }\nwith (o) { bar() }'
+    expect(t.transform(src, {})).toBe(src)
+  })
+
+  it('still abstains when `eval` accompanies a namespace', async () => {
+    const t = await on('typescript')
+    const src = 'import { foo } from "m"\nnamespace V { export const z = 1 }\neval("foo")'
+    expect(t.transform(src, {})).toBe(src)
+  })
+})
+
 describe('removeUnusedImports — Vue SFC (script only)', () => {
   it('removes an unused import from <script setup>, leaving the template untouched', async () => {
     const t = await on(vueSplitter)
