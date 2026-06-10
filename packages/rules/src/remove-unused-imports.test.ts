@@ -136,6 +136,23 @@ describe('removeUnusedImports — type-aware (value↔type)', () => {
     expect(t.transform("import type { Foo } from 'm'\nbar()", {})).toBe('\nbar()')
   })
 
+  it('keeps a type-only import referenced only through `typeof`', async () => {
+    const t = await on('typescript')
+    // `typeof f` lexes its operand as a value `identifier`, not a `type_identifier`; an `import
+    // type` binding scores `valueUsed === false`, so without the type-query scan it reads unused.
+    expect(t.transform('import type { f, g } from "x"\ntype T = ReturnType<typeof f>', {})).toBe(
+      'import type { f } from "x"\ntype T = ReturnType<typeof f>',
+    )
+  })
+
+  it('keeps a type-only import referenced via a `typeof` member head', async () => {
+    const t = await on('typescript')
+    // The head of `typeof a.foo` is the imported name; `.foo` is a property, not the binding.
+    expect(t.transform('import type { a, b } from "x"\ntype T = ReturnType<typeof a.foo>', {})).toBe(
+      'import type { a } from "x"\ntype T = ReturnType<typeof a.foo>',
+    )
+  })
+
   it('drops the unused specifier of a type-only import, keeping the used one', async () => {
     const t = await on('typescript')
     expect(t.transform("import type { Foo, Bar } from 'm'\nlet x: Bar", {})).toBe("import type { Bar } from 'm'\nlet x: Bar")

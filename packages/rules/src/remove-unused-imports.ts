@@ -19,6 +19,11 @@ export const removeUnusedImports = defineCodemod((root) => {
     const head = qualified.field('module')
     if (head.type === 'identifier') typeRefs.add(head.text)
   })
+  // A `typeof X` type query holds its operand as a value `identifier` (the head of any member or
+  // instantiation chain — `typeof a.b`, `typeof g<T>`), so it never lexes as a `type_identifier`.
+  // Without this, a type-only import used solely through `typeof` reads as unreferenced — its
+  // `isType` binding scores `valueUsed === false` — and is wrongly pruned.
+  root.find('type_query').forEach((query) => query.find('identifier').forEach((id) => typeRefs.add(id.text)))
 
   // The resolver abstains on the whole file at a construct it can't rename through — a TS namespace,
   // `declare module`/`declare global`. Use-detection still holds (an import is used iff its name
