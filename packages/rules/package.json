@@ -1,8 +1,17 @@
 {
   "name": "@codegraft/rules",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.0",
+  "description": "Ready-made Codegraft codemods — ESLint-rule-style transforms (e.g. removeUnusedImports), one rule per module, tree-shakeable.",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/magne4000/codegraft.git",
+    "directory": "packages/rules"
+  },
+  "homepage": "https://github.com/magne4000/codegraft#readme",
+  "bugs": "https://github.com/magne4000/codegraft/issues",
   "files": ["dist"],
   "exports": {
     ".": {
@@ -13,6 +22,9 @@
       "import": "./dist/*.js",
       "types": "./dist/*.d.ts"
     }
+  },
+  "engines": {
+    "node": ">=22.13"
   },
   "scripts": {
     "build": "tsc -b"

@@ -1,8 +1,18 @@
 {
   "name": "@codegraft/unplugin",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.0",
+  "description": "Apply Codegraft transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm.",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/magne4000/codegraft.git",
+    "directory": "packages/unplugin"
+  },
+  "homepage": "https://github.com/magne4000/codegraft#readme",
+  "bugs": "https://github.com/magne4000/codegraft/issues",
+  "files": ["dist"],
   "exports": {
     ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
     "./vite": { "import": "./dist/vite.js", "types": "./dist/vite.d.ts" },
@@ -12,6 +22,9 @@
     "./webpack": { "import": "./dist/webpack.js", "types": "./dist/webpack.d.ts" },
     "./rspack": { "import": "./dist/rspack.js", "types": "./dist/rspack.d.ts" },
     "./farm": { "import": "./dist/farm.js", "types": "./dist/farm.d.ts" }
+  },
+  "engines": {
+    "node": ">=22.13"
   },
   "scripts": {
     "build": "tsc -b"

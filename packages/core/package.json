@@ -1,8 +1,17 @@
 {
   "name": "@codegraft/core",
-  "version": "0.0.0",
+  "version": "0.1.0-beta.0",
+  "description": "Tree-sitter runtime for Codegraft: parser, RichNode, comment attachment, zone splitting, the Collection, scope resolver, and edit application.",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/magne4000/codegraft.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/magne4000/codegraft#readme",
+  "bugs": "https://github.com/magne4000/codegraft/issues",
   "files": ["dist", "wasm"],
   "exports": {
     ".": {
@@ -13,6 +22,9 @@
       "import": "./dist/internal.js",
       "types": "./dist/internal.d.ts"
     }
+  },
+  "engines": {
+    "node": ">=22.13"
   },
   "scripts": {
     "build": "tsc -b",
