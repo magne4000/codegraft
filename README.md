@@ -196,9 +196,23 @@ codegraft run "src/**/*.tsx" --codemod bati-codemod.ts --context '{"flags":{"aut
 
 ## How it works
 
-`splitAndParse` turns a target into parsed zones (a single grammar → one zone; a `ZoneSplitter` → one per SFC section). Comments are attached to nodes, then your codemod runs against a `Collection` over every zone's tree, recording edits. Edits go through `magic-string` (so source maps stay precise); a narrow-delete like `unwrap` keeps the retained range editable, so nested conditionals collapse in one pass. Whitespace clean-up is left to Prettier.
+`splitAndParse` turns a target into parsed zones (a single grammar → one zone; a `ZoneSplitter` → one per SFC section). Comments are attached to nodes, then your codemod runs against a `Collection` over every zone's tree, recording edits. Edits go through `magic-string` (so source maps stay precise); a narrow-delete like `unwrap` keeps the retained range editable, so nested conditionals collapse in one pass. Whitespace clean-up is otherwise left to Prettier — unless you opt into `format` (below).
 
 Every consumer — `forTarget`, `codegraft run`, and `@codegraft/unplugin` — runs the codemod's **live** function (via `createCodemodTransformer`), so a codemod is free to use module-scope helpers, imports, and npm deps. There is no compile/serialise step.
+
+### Preserving formatting (`format`)
+
+Because Codegraft edits byte ranges rather than reprinting, **code you don't touch keeps its exact formatting for free** — there's no reprint step to disturb it (recast's headline feature, but unconditional here). What's left is the *inserted* text: by default a snippet lands verbatim, so a new statement appended to a block sits at column 0.
+
+Opt into `defineCodemod({ format: true }, …)` to make insertions indentation-aware. Codegraft detects the file's indent unit and line ending (a `detect-indent`-style guess, falling back to two spaces / `\n`) and re-indents what `replaceWith`/`append`/`prepend`/`insertBefore`/`insertAfter`/`addLeadingComment`/`ensureImport` record — matching the surrounding indentation and preserving the snippet's own internal indentation:
+
+```ts
+// with { format: true }, appending into:   function f() {␊  a()␊}
+root.find('statement_block').first().append('b()')
+// →  function f() {␊  a()␊  b()␊}          (without it: b() lands at column 0)
+```
+
+It's a guess, not a formatter: it handles indentation and EOLs (the readability win for the bundler path, where running Prettier per-module is impractical) and leaves quote/semicolon/trailing-comma style to the snippet you write (and to Prettier). Only newline-separated blocks (statement/class bodies) are re-indented; comma-separated containers like arrays and argument lists stay inline.
 
 ## Development
 
