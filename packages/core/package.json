@@ -1,6 +1,6 @@
 {
   "name": "@codegraft/core",
-  "version": "0.1.0-beta.3",
+  "version": "0.1.0-beta.4",
   "description": "Tree-sitter runtime for Codegraft: parser, RichNode, comment attachment, zone splitting, the Collection, scope resolver, and edit application.",
   "license": "MIT",
   "type": "module",
