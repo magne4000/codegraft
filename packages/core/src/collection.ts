@@ -13,11 +13,15 @@ import { attachComments, COMMENT_TYPES } from './comment-attachment.js'
 import { EditCollector } from './edit-collector.js'
 import { evaluate as evaluateNode } from './evaluate.js'
 import { createResolver, type Resolver } from './resolver.js'
+import { detectStyle, reindent, type FormatStyle } from './format.js'
 import { assert } from './assert.js'
 
 /** Shared per-transform state a {@link Collection} records edits into. */
 interface Session {
   collector: EditCollector
+  /** Detected formatting conventions when the codemod opts into `format`, else `null` — with
+   *  `null`, inserted text is recorded verbatim (whitespace clean-up left to Prettier). */
+  style: FormatStyle | null
   /** The binding resolver for `node`'s zone (JS/TS/TSX), or `null` if unsupported. */
   resolver(node: RichNode): Resolver | null
 }
@@ -238,7 +242,8 @@ export class Collection<G extends GrammarId = GrammarId> {
   /** Replace each selected node with `text`, or with the string a callback derives from it. */
   replaceWith(text: TextArg<G>): this {
     for (const node of this.#nodes) {
-      this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, this.#text(text, node))
+      const next = this.#reindent(this.#text(text, node), node.documentStartIndex)
+      this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, next)
     }
     return this
   }
@@ -300,13 +305,21 @@ export class Collection<G extends GrammarId = GrammarId> {
 
   /** Insert `text` (literal or derived per node) immediately before each selected node. */
   insertBefore(text: TextArg<G>): this {
-    for (const node of this.#nodes) this.#session.collector.insertLeft(node.documentStartIndex, this.#text(text, node))
+    for (const node of this.#nodes) {
+      const at = node.documentStartIndex
+      let next = this.#reindent(this.#text(text, node), at)
+      // A trailing newline would leave the displaced node at column 0 — restore its indent.
+      if (this.#session.style && next.endsWith('\n')) next += this.#session.collector.indentAt(at)
+      this.#session.collector.insertLeft(at, next)
+    }
     return this
   }
 
   /** Insert `text` (literal or derived per node) immediately after each selected node. */
   insertAfter(text: TextArg<G>): this {
-    for (const node of this.#nodes) this.#session.collector.insertRight(node.documentEndIndex, this.#text(text, node))
+    for (const node of this.#nodes) {
+      this.#session.collector.insertRight(node.documentEndIndex, this.#reindent(this.#text(text, node), node.documentStartIndex))
+    }
     return this
   }
 
@@ -319,23 +332,38 @@ export class Collection<G extends GrammarId = GrammarId> {
     return this
   }
 
-  /** Append `text` as the last element of each container node (array/object/argument list/block):
-   *  after the last element with the right separator, or just inside an empty container. */
+  /** Append `text` as the last element of each container: a fresh indented line in a block/class
+   *  body (re-indented under `format`), or after the last element with a comma in an
+   *  array/object/argument list. */
   append(text: string): this {
     for (const node of this.#nodes) {
       const elements = node.children
-      if (elements.length === 0) this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text)
-      else this.#session.collector.insertRight(elements[elements.length - 1].documentEndIndex, separatorFor(node) + text)
+      if (NEWLINE_CONTAINERS.has(node.type)) {
+        if (elements.length === 0) this.#fillBlock(node, text)
+        else {
+          const last = elements[elements.length - 1]
+          this.#session.collector.insertRight(last.documentEndIndex, this.#line(text, last.documentStartIndex))
+        }
+      } else if (elements.length === 0) {
+        this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text)
+      } else {
+        this.#session.collector.insertRight(elements[elements.length - 1].documentEndIndex, ', ' + text)
+      }
     }
     return this
   }
 
-  /** Prepend `text` as the first element of each container node. */
+  /** Prepend `text` as the first element of each container — the mirror of {@link append}. */
   prepend(text: string): this {
     for (const node of this.#nodes) {
-      const open = openDelimiter(node).documentEndIndex
       const elements = node.children
-      this.#session.collector.insertRight(open, elements.length === 0 ? text : text + separatorFor(node))
+      if (NEWLINE_CONTAINERS.has(node.type)) {
+        if (elements.length === 0) this.#fillBlock(node, text)
+        else this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, this.#line(text, elements[0].documentStartIndex))
+      } else {
+        const open = openDelimiter(node).documentEndIndex
+        this.#session.collector.insertRight(open, elements.length === 0 ? text : text + ', ')
+      }
     }
     return this
   }
@@ -346,8 +374,9 @@ export class Collection<G extends GrammarId = GrammarId> {
     const source = importSource(statement)
     const imports = this.find('import_statement' as NodeTypeOf<G>).#nodes
     if (imports.some((imp) => importSource(imp.text) === source)) return this
-    if (imports.length === 0) return this.prependToFile(statement + '\n')
-    this.#session.collector.insertRight(imports[imports.length - 1].documentEndIndex, '\n' + statement)
+    const eol = this.#session.style?.eol ?? '\n'
+    if (imports.length === 0) return this.prependToFile(statement + eol)
+    this.#session.collector.insertRight(imports[imports.length - 1].documentEndIndex, eol + statement)
     return this
   }
 
@@ -371,8 +400,7 @@ export class Collection<G extends GrammarId = GrammarId> {
 
   /** Add a leading comment line above each selected node (pass the full comment, e.g. `// note`). */
   addLeadingComment(text: string): this {
-    for (const node of this.#nodes) this.#session.collector.insertLeft(node.documentStartIndex, text + '\n')
-    return this
+    return this.insertBefore(`${text}\n`)
   }
 
   /** Add a trailing comment after each selected node, on the same line. */
@@ -434,6 +462,35 @@ export class Collection<G extends GrammarId = GrammarId> {
   #text(arg: TextArg<G>, node: RichNode): string {
     return typeof arg === 'function' ? arg(new Collection<G>([node], this.#session)) : arg
   }
+  // Inserted-text formatting — each helper's verbatim arm (no `style`) reproduces the pre-`format`
+  // behaviour byte-for-byte, so the option is purely additive.
+
+  /** `text` re-indented to the line at `index`; unchanged when not formatting (or single-line). */
+  #reindent(text: string, index: number): string {
+    const { style } = this.#session
+    return style ? reindent(text, this.#session.collector.indentAt(index), style.eol) : text
+  }
+  /** `text` as a fresh line at the indentation of the sibling at `index`; the bare `\n` body
+   *  separator when not formatting. */
+  #line(text: string, index: number): string {
+    const { style } = this.#session
+    if (!style) return '\n' + text
+    const indent = this.#session.collector.indentAt(index)
+    return style.eol + indent + reindent(text, indent, style.eol)
+  }
+  /** Open an empty `{}` block onto its own indented line — `{}` → `{⏎  text⏎}` — or insert `text`
+   *  bare when not formatting. */
+  #fillBlock(node: RichNode, text: string): void {
+    const open = openDelimiter(node).documentEndIndex
+    const { style } = this.#session
+    if (!style) {
+      this.#session.collector.insertRight(open, text)
+      return
+    }
+    const blockIndent = this.#session.collector.indentAt(node.documentStartIndex)
+    const indent = blockIndent + style.indentUnit
+    this.#session.collector.insertRight(open, style.eol + indent + reindent(text, indent, style.eol) + style.eol + blockIndent)
+  }
   /** Capture this node's text, delete it, and re-insert it at `target` via `place`. */
   #move(target: Collection<G>, place: (dest: RichNode, text: string) => void): this {
     const node = this.#single()
@@ -488,11 +545,8 @@ function openDelimiter(node: RichNode): RichNode {
   return open
 }
 
+// Containers whose elements are separated by newlines (a block / class body), not commas.
 const NEWLINE_CONTAINERS = new Set(['statement_block', 'class_body', 'program'])
-/** Separator between a container's elements: newline for statement lists, comma otherwise. */
-function separatorFor(node: RichNode): string {
-  return NEWLINE_CONTAINERS.has(node.type) ? '\n' : ', '
-}
 
 /** The module specifier of an import statement's source text, for idempotent `ensureImport`. */
 function importSource(statementText: string): string | null {
@@ -589,9 +643,10 @@ export function createCodemodTransformer<
 >(
   target: GrammarId | ZoneSplitter,
   codemod: (root: Collection<G>, context: Ctx) => void,
-  options?: { namespace?: string },
+  options?: { namespace?: string; format?: boolean },
 ): LazyTransformer<Ctx> {
   const namespace = options?.namespace
+  const format = options?.format ?? false
   let pending: Promise<Transformer<Ctx>> | null = null
 
   async function build(): Promise<Transformer<Ctx>> {
@@ -606,10 +661,13 @@ export function createCodemodTransformer<
       if (namespace !== undefined && !source.includes(namespace)) return collector
       const zones: Zone[] = splitAndParse(source, target)
       for (const zone of zones) attachComments(zone.tree)
+      // Detect the file's indent unit / EOL once, only when the codemod opts into formatting.
+      const style = format ? detectStyle(source) : null
       // One resolver per zone tree, built on first use (only if the codemod asks for scope).
       const resolvers = new Map<RichNode, Resolver | null>()
       const session: Session = {
         collector,
+        style,
         resolver(node) {
           const treeRoot = rootOf(node)
           if (!resolvers.has(treeRoot)) resolvers.set(treeRoot, createResolver(treeRoot))
