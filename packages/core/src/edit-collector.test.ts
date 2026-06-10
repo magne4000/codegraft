@@ -48,6 +48,35 @@ describe('EditCollector', () => {
     expect(c.toString()).toBe('body')
   })
 
+  it('removeFormatted collapses the line when the span owns it', () => {
+    // `  b\n` is wholly occupied by the removed span → the whole line goes, no blank left behind.
+    const src = 'a\n  b\nc'
+    const c = new EditCollector(src)
+    c.removeFormatted(src.indexOf('b'), src.indexOf('b') + 1)
+    expect(c.toString()).toBe('a\nc')
+  })
+
+  it('removeFormatted collapses a multi-line span that owns its lines', () => {
+    const src = 'a\n  x(\n    1,\n  ),\nc'
+    const c = new EditCollector(src)
+    c.removeFormatted(src.indexOf('x('), src.indexOf('),') + 2) // the `x(\n…),` element + comma
+    expect(c.toString()).toBe('a\nc')
+  })
+
+  it('removeFormatted leaves an inline hole untouched (delete only the span)', () => {
+    const src = '[1, two, 3]'
+    const c = new EditCollector(src)
+    c.removeFormatted(src.indexOf('two'), src.indexOf('3')) // `two, ` — an inline span, no line collapse
+    expect(c.toString()).toBe('[1, 3]')
+  })
+
+  it('removeFormatted keeps the line when content trails the span', () => {
+    const src = '  drop more\n'
+    const c = new EditCollector(src)
+    c.removeFormatted(2, 6) // `drop`, but ` more` trails on the same line
+    expect(c.toString()).toBe('   more\n')
+  })
+
   it('reports the indentation of the line containing an index', () => {
     const src = 'function f() {\n    return 1\n}'
     const c = new EditCollector(src)

@@ -76,6 +76,37 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('const a = [1, 2]', {})).toBe('const a = [1, 2, 3]')
   })
 
+  it('collapses the line of an own-line element removed under format', async () => {
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('array').first().children().at(1).remove({ separator: true })
+    }).forTarget('tsx')
+    // No blank line where `two(),` was — the line goes entirely, as Prettier would have collapsed it.
+    expect(t.transform('const a = [\n  1,\n  two(),\n  3,\n];', {})).toBe('const a = [\n  1,\n  3,\n];')
+  })
+
+  it('collapses the line of an emptied own-line call argument under format', async () => {
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('arguments').first().children().at(0).remove({ separator: true })
+    }).forTarget('tsx')
+    expect(t.transform('cfg(\n  arg\n);', {})).toBe('cfg(\n);')
+  })
+
+  it('leaves an inline element hole untouched (does not eat siblings) under format', async () => {
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('array').first().children().at(1).remove({ separator: true })
+    }).forTarget('tsx')
+    // The span is deleted in place; the residual space is the downstream formatter's job — the point
+    // is that the inline sibling `3` survives (whole-line collapse must not fire here).
+    expect(t.transform('const a = [1, two(), 3];', {})).toBe('const a = [1,  3];')
+  })
+
+  it('without format, a removed own-line element leaves its line blank (verbatim contract)', async () => {
+    const t = await defineCodemod((root) => {
+      root.find('array').first().children().at(1).remove({ separator: true })
+    }).forTarget('tsx')
+    expect(t.transform('const a = [\n  1,\n  two(),\n  3,\n];', {})).toBe('const a = [\n  1,\n  \n  3,\n];')
+  })
+
   it('is off by default — an appended statement still lands at column 0', async () => {
     const t = await defineCodemod((root) => {
       root.find('statement_block').first().append('c()')
