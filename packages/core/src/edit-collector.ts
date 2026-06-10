@@ -37,14 +37,34 @@ export class EditCollector {
    *  before `start`, only whitespace after `end` up to the line break — drop the whole lines so no
    *  blank line is left behind; otherwise an in-line delete. Used under `format` so removing an
    *  own-line node collapses its line the way Prettier would, while an inline element (`[1, x, 3]`)
-   *  is left untouched around the hole. */
+   *  is left untouched around the hole.
+   *
+   *  The content, the leading indent, and the trailing line break are claimed separately so the
+   *  removal composes after an abutting edit: a prior `unwrap`/`dropDirective` that already consumed
+   *  the run up to `start` leaves the content abutting it (no overlap, so it lands), while the
+   *  leading-indent claim it overlaps is dropped on its own (first-wins) instead of taking the whole
+   *  line removal down with it. */
   removeFormatted(start: number, end: number): void {
     const lineStart = this.#lineStart(start)
-    const lineEnd = this.#source.indexOf('\n', end)
-    const trailing = this.#source.slice(end, lineEnd === -1 ? this.#source.length : lineEnd)
-    const ownsLines = this.#source.slice(lineStart, start).trim() === '' && trailing.trim() === ''
-    // Owns its line(s) ⇒ a whole-lines removal (no blank left behind); otherwise delete just the span.
-    if (ownsLines) this.removeLines(start, end)
+    const newline = this.#source.indexOf('\n', end)
+    const lineEnd = newline === -1 ? this.#source.length : newline
+    const ownsLines = this.#source.slice(lineStart, start).trim() === '' && this.#source.slice(end, lineEnd).trim() === ''
+    this.remove(start, end) // the content — abuts any prior edit at `start`, so it always lands
+    if (!ownsLines) return
+    this.remove(lineStart, start) // leading indent — may be already gone under a prior edit
+    this.remove(end, newline === -1 ? this.#source.length : newline + 1) // trailing line break
+  }
+
+  /** Delete `[start, end)` where `end` begins a following node, collapsing the lines before it:
+   *  when `start` opens its own line and `end` sits on a later line, drop `[start's line, end's
+   *  line)` so the leading run (a directive comment and any comments stacked under it) vanishes
+   *  whole-line while `end`'s own line — its indentation included — is left for a later edit to
+   *  collapse independently. Otherwise (an inline `start`, or `end` on the same line) a verbatim
+   *  `[start, end)` delete. Used by `dropDirective` so it composes with a following `remove`. */
+  removeUpToLine(start: number, end: number): void {
+    const startLine = this.#lineStart(start)
+    const endLine = this.#lineStart(end)
+    if (endLine > startLine && this.#source.slice(startLine, start).trim() === '') this.remove(startLine, endLine)
     else this.remove(start, end)
   }
 

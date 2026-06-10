@@ -77,6 +77,31 @@ describe('EditCollector', () => {
     expect(c.toString()).toBe('   more\n')
   })
 
+  it('removeFormatted still drops the content after a prior edit took the leading indent', () => {
+    // A prior delete claimed `[0, 5)` — the wrapper plus `b`'s leading indent. removeFormatted of `b`
+    // would overlap that indent; the content claim abuts the prior delete and must still land.
+    const src = 'xy\n  b\nc'
+    const c = new EditCollector(src)
+    c.remove(0, 5) // mimic unwrap/dropDirective: removes up to (and including) `b`'s indent
+    c.removeFormatted(5, 6) // remove `b`; its line collapses, so `b\n` goes too
+    expect(c.toString()).toBe('c')
+  })
+
+  it('removeUpToLine collapses the leading lines but keeps the node line', () => {
+    // Drop the directive line and the comment stacked under it; `const`'s own line is untouched.
+    const src = '//# x\n// y\nconst a'
+    const c = new EditCollector(src)
+    c.removeUpToLine(0, src.indexOf('const'))
+    expect(c.toString()).toBe('const a')
+  })
+
+  it('removeUpToLine falls back to a verbatim delete for an inline directive', () => {
+    const src = '/* x */ const a'
+    const c = new EditCollector(src)
+    c.removeUpToLine(0, src.indexOf('const'))
+    expect(c.toString()).toBe('const a')
+  })
+
   it('reports the indentation of the line containing an index', () => {
     const src = 'function f() {\n    return 1\n}'
     const c = new EditCollector(src)
