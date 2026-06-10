@@ -3,6 +3,7 @@ import { getConditionalBranches } from '@codegraft/core'
 import { defineCodemod } from '@codegraft/codemod'
 import type { BatiContext } from './context.js'
 import { extractDirective } from './directive.js'
+import { unquote } from './text.js'
 
 /** A leading comment that is a `$$` directive — the pattern `dropDirective` keys off. */
 const DIRECTIVE = /\$\$/
@@ -199,8 +200,4 @@ function isJsxElement(type: string): boolean {
 function isQualified(type: Collection, member: string): boolean {
   if (type.size() === 0 || type.type !== 'nested_type_identifier') return false
   return type.field('module').text === '$$' && type.field('name').text === member
-}
-
-function unquote(text: string): string {
-  return text.replace(/^['"`]|['"`]$/g, '')
 }

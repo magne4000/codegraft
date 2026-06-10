@@ -65,6 +65,31 @@ export {}
 - **`batiImports`** (no namespace) — `@batijs/…` → relative rewrite and the relative-import graph.
   Deliberately **not** scan-gated on `$$`, because a file can import from `@batijs/…` with no `$$`.
 
+### Config edits (the magicast port)
+
+`vite-config.ts` re-authors Bati's magicast helpers as functions over `Collection`, composed inside a
+codemod body the way Bati composed magicast calls (these are programmatic edits, not `$$` directives):
+
+```ts
+import { addVitePlugin, mergeObject, defineConfigArg } from '@codegraft/bati-codemods'
+
+defineCodemod((root) => {
+  addVitePlugin(root, { from: '@vitejs/plugin-react', constructor: 'react' }) // → import + plugins.push, idempotent
+  mergeObject(defineConfigArg(root), { build: { sourcemap: 'true' } })        // magicast deepMergeObject
+}).forTarget('typescript')
+```
+
+- **`addVitePlugin(root, { from, constructor, named?, options? })`** — append `constructor(options?)` to
+  `defineConfig`'s `plugins` array (idempotent) and `ensureImport` it.
+- **`mergeObject(object, source)`** — deep-merge a `ConfigObject` (nested `{ key: codeText | nested }`,
+  leaves are raw code) into an object literal; `defineConfigArg(root)` locates `defineConfig`'s argument.
+- Import / statement injection (e.g. Bati's `imports.$prepend` + `builders.functionCall`) needs no helper
+  — use core's `ensureImport` and `insertBefore`.
+
+Not ported: `package.json`/`tsconfig` edits (`PackageJsonTransformer`/`loadAsJson` are JSON-object
+manipulation, not AST — codegraft has no JSON grammar) and the 2-input `.d.ts` merge (`merge-dts.ts`
+combines two modules, outside the single-source `transform(source)` model).
+
 ### Run order
 
 ```ts
