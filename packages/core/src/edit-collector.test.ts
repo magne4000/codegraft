@@ -48,6 +48,16 @@ describe('EditCollector', () => {
     expect(c.toString()).toBe('body')
   })
 
+  it('reports the indentation of the line containing an index', () => {
+    const src = 'function f() {\n    return 1\n}'
+    const c = new EditCollector(src)
+    expect(c.indentAt(src.indexOf('return'))).toBe('    ')
+  })
+
+  it('reports an empty indent at the start of the file', () => {
+    expect(new EditCollector('foo').indentAt(0)).toBe('')
+  })
+
   it('generates a v3 source map', () => {
     const c = new EditCollector('const x = 1')
     c.overwrite(0, 11, 'REPLACED')

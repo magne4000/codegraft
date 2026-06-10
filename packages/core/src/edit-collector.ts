@@ -38,10 +38,10 @@ export class EditCollector {
    *  With `collapseBlankBefore`, also absorb whole blank lines immediately above (a separator before
    *  a dropped block). */
   removeLines(start: number, end: number, collapseBlankBefore = false): void {
-    let lineStart = this.#source.lastIndexOf('\n', start - 1) + 1
+    let lineStart = this.#lineStart(start)
     if (collapseBlankBefore) {
       while (lineStart > 0) {
-        const prevStart = this.#source.lastIndexOf('\n', lineStart - 2) + 1
+        const prevStart = this.#lineStart(lineStart - 1)
         if (this.#source.slice(prevStart, lineStart - 1).trim() !== '') break // a non-blank line stops it
         lineStart = prevStart
       }
@@ -61,12 +61,23 @@ export class EditCollector {
     this.#magic.appendRight(index, text)
   }
 
+  /** The leading whitespace of the line containing `index` — the base indent an inserted block
+   *  should match. Empty when the line starts with a non-whitespace character. */
+  indentAt(index: number): string {
+    return /^[ \t]*/.exec(this.#source.slice(this.#lineStart(index), index))![0]
+  }
+
   toString(): string {
     return this.#magic.toString()
   }
 
   generateMap(source: string): SourceMap {
     return this.#magic.generateMap({ source, includeContent: true, hires: true })
+  }
+
+  // Offset of the first character of the line containing `index`.
+  #lineStart(index: number): number {
+    return this.#source.lastIndexOf('\n', index - 1) + 1
   }
 
   // Half-open intervals [start, end): reject one overlapping an accepted edit (touching
