@@ -454,7 +454,14 @@ export class Collection<G extends GrammarId = GrammarId> {
   dropDirective(pattern: RegExp): this {
     const node = this.#single()
     const comment = node.leadingComments.find((c) => pattern.test(c.text))
-    if (comment) this.#session.collector.remove(comment.documentStartIndex, node.documentStartIndex)
+    if (!comment) return this
+    // Under format, collapse the directive's own line and stop there, leaving the node's line for a
+    // following `remove` to collapse independently — the two deletes land on separate lines and
+    // compose. Reaching into the node's line (the verbatim `[comment, node)` delete) would instead
+    // overlap that `remove` and, first-wins, get it dropped. Off: verbatim delete of the comment and
+    // the gap up to the node, residual whitespace left for the downstream formatter.
+    if (this.#session.style) this.#session.collector.removeFormatted(comment.documentStartIndex, comment.documentEndIndex)
+    else this.#session.collector.remove(comment.documentStartIndex, node.documentStartIndex)
     return this
   }
 

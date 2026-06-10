@@ -107,6 +107,33 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('const a = [\n  1,\n  two(),\n  3,\n];', {})).toBe('const a = [\n  1,\n  \n  3,\n];')
   })
 
+  it('drops a directive then removes its own-line element under format (both lines collapse)', async () => {
+    // The directive comment owns its line, so `dropDirective` collapses that line and stops there —
+    // the following `remove` collapses the element's line independently; the two edits compose.
+    const t = await defineCodemod({ format: true }, (root) => {
+      const el = root.find('array').first().children().at(1)
+      el.dropDirective(/x/)
+      el.remove({ separator: true })
+    }).forTarget('tsx')
+    expect(t.transform('const a = [\n  1,\n  //# x\n  two(),\n  3,\n];', {})).toBe('const a = [\n  1,\n  3,\n];')
+  })
+
+  it('drops an own-line directive without removing the node, collapsing only its line, under format', async () => {
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('array').first().children().at(1).dropDirective(/x/)
+    }).forTarget('tsx')
+    expect(t.transform('const a = [\n  1,\n  //# x\n  two(),\n  3,\n];', {})).toBe('const a = [\n  1,\n  two(),\n  3,\n];')
+  })
+
+  it('without format, dropDirective + remove still drops the element (verbatim, blank line left)', async () => {
+    const t = await defineCodemod((root) => {
+      const el = root.find('array').first().children().at(1)
+      el.dropDirective(/x/)
+      el.remove({ separator: true })
+    }).forTarget('tsx')
+    expect(t.transform('const a = [\n  1,\n  //# x\n  two(),\n  3,\n];', {})).toBe('const a = [\n  1,\n  \n  3,\n];')
+  })
+
   it('is off by default — an appended statement still lands at column 0', async () => {
     const t = await defineCodemod((root) => {
       root.find('statement_block').first().append('c()')
