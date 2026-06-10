@@ -171,6 +171,37 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('if ($$.a) {\n  if ($$.b) {\n    yes();\n  }\n  no();\n}', { a: true, b: false })).toBe('  no();')
   })
 
+  it('collapses the line of a leading comment emptied via mapLeadingComment under format', async () => {
+    const t = await defineCodemod({ format: true }, (root) =>
+      root.find('object').first().children().first().mapLeadingComment(() => ''),
+    ).forTarget('tsx')
+    expect(t.transform('const a = {\n  // x\n  k: 1,\n};', {})).toBe('const a = {\n  k: 1,\n};')
+  })
+
+  it('empties just the directive line, keeping a stacked sibling comment, under format', async () => {
+    // Bati's stacked dropDirectiveComment: empty the directive but keep the `///<reference>` under it.
+    const t = await defineCodemod({ format: true }, (root) =>
+      root.find('object').first().children().first().mapLeadingComment(() => ''),
+    ).forTarget('tsx')
+    expect(t.transform('const a = {\n  //# d\n  /// <reference />\n  k: 1,\n};', {})).toBe(
+      'const a = {\n  /// <reference />\n  k: 1,\n};',
+    )
+  })
+
+  it('a non-empty mapLeadingComment still rewrites in place under format', async () => {
+    const t = await defineCodemod({ format: true }, (root) =>
+      root.find('object').first().children().first().mapLeadingComment((s) => s + '!'),
+    ).forTarget('tsx')
+    expect(t.transform('const a = {\n  // x\n  k: 1,\n};', {})).toBe('const a = {\n  // x!\n  k: 1,\n};')
+  })
+
+  it('without format, emptying a leading comment leaves its line blank (verbatim contract)', async () => {
+    const t = await defineCodemod((root) =>
+      root.find('object').first().children().first().mapLeadingComment(() => ''),
+    ).forTarget('tsx')
+    expect(t.transform('const a = {\n  // x\n  k: 1,\n};', {})).toBe('const a = {\n  \n  k: 1,\n};')
+  })
+
   it('is off by default — an appended statement still lands at column 0', async () => {
     const t = await defineCodemod((root) => {
       root.find('statement_block').first().append('c()')

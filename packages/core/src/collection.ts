@@ -430,11 +430,20 @@ export class Collection<G extends GrammarId = GrammarId> {
     return this
   }
 
-  /** Rewrite each node's first leading comment with `fn(its text)`; no-op where there is none. */
+  /** Rewrite each node's first leading comment with `fn(its text)`; no-op where there is none.
+   *  Emptying it (`fn` returns `''`) drops the comment: under `format` its line collapses (no blank
+   *  left behind, like `remove`/`dropDirective`), keeping any sibling comments and the node; off, the
+   *  verbatim overwrite leaves the residual line for the downstream formatter. */
   mapLeadingComment(fn: (text: string) => string): this {
     for (const node of this.#nodes) {
       const comment = node.leadingComments[0]
-      if (comment) this.#session.collector.overwrite(comment.documentStartIndex, comment.documentEndIndex, fn(comment.text))
+      if (!comment) continue
+      const next = fn(comment.text)
+      if (next === '' && this.#session.style) {
+        this.#session.collector.removeFormatted(comment.documentStartIndex, comment.documentEndIndex)
+      } else {
+        this.#session.collector.overwrite(comment.documentStartIndex, comment.documentEndIndex, next)
+      }
     }
     return this
   }
