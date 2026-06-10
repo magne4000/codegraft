@@ -11,6 +11,9 @@
       "path": "./packages/rules"
     },
     {
+      "path": "./packages/bati-codemods"
+    },
+    {
       "path": "./packages/vue"
     },
     {

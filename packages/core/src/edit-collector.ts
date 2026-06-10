@@ -12,10 +12,12 @@ import type { SourceMap } from './types.js'
  */
 export class EditCollector {
   readonly #magic: MagicString
+  readonly #source: string
   readonly #claimed: Array<[number, number]> = []
 
   constructor(source: string) {
     this.#magic = new MagicString(source)
+    this.#source = source
   }
 
   /** Replace `[start, end)` with `replacement` (an empty range inserts before `start`). */
@@ -29,6 +31,23 @@ export class EditCollector {
   remove(start: number, end: number): void {
     if (start === end || !this.#claim(start, end)) return
     this.#magic.remove(start, end)
+  }
+
+  /** Delete the whole lines `[start, end)` touches — from the start of `start`'s line (leading
+   *  indentation included) through the newline after `end`'s line, so nothing blank is left behind.
+   *  With `collapseBlankBefore`, also absorb whole blank lines immediately above (a separator before
+   *  a dropped block). */
+  removeLines(start: number, end: number, collapseBlankBefore = false): void {
+    let lineStart = this.#source.lastIndexOf('\n', start - 1) + 1
+    if (collapseBlankBefore) {
+      while (lineStart > 0) {
+        const prevStart = this.#source.lastIndexOf('\n', lineStart - 2) + 1
+        if (this.#source.slice(prevStart, lineStart - 1).trim() !== '') break // a non-blank line stops it
+        lineStart = prevStart
+      }
+    }
+    const newline = this.#source.indexOf('\n', end)
+    this.remove(lineStart, newline === -1 ? this.#source.length : newline + 1)
   }
 
   /** Insert `text` at `index`, attached to the left chunk. A point insertion: it claims no

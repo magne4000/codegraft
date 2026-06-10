@@ -9,7 +9,7 @@ import type {
 import type { FieldName, NodeTypeOf, NodeTypeAllOf, FieldNameOf } from './generated/node-types.js'
 import { Parser } from './parser.js'
 import { splitAndParse } from './zone-splitter.js'
-import { attachComments } from './comment-attachment.js'
+import { attachComments, COMMENT_TYPES } from './comment-attachment.js'
 import { EditCollector } from './edit-collector.js'
 import { evaluate as evaluateNode } from './evaluate.js'
 import { createResolver, type Resolver } from './resolver.js'
@@ -67,6 +67,20 @@ export class Collection<G extends GrammarId = GrammarId> {
           seen.add(child)
           out.push(child)
         }
+        walk(child)
+      }
+    }
+    for (const node of this.#nodes) walk(node)
+    return this.#select(out)
+  }
+
+  /** Comment nodes in the subtree (which `find`/`children` omit), optionally only those matching
+   *  `pattern` — the entry point for transforms that act on directive comments themselves. */
+  findComments(pattern?: RegExp): Collection<G> {
+    const out: RichNode[] = []
+    const walk = (node: RichNode): void => {
+      for (const child of node.allChildren) {
+        if (COMMENT_TYPES[child.language].has(child.type) && (!pattern || pattern.test(child.text))) out.push(child)
         walk(child)
       }
     }
@@ -241,9 +255,24 @@ export class Collection<G extends GrammarId = GrammarId> {
     return this
   }
 
-  remove(): this {
+  /**
+   * Remove each selected node.
+   * - `separator`: also drop the trailing `,` of a list element, leaving no array hole / dangling comma.
+   * - `wholeLines`: remove the whole lines the node spans (a full-line comment, a YAML entry), so no
+   *   blank line is left; `collapseBlankBefore` additionally absorbs a blank-line separator directly above.
+   */
+  remove(options?: { separator?: boolean; wholeLines?: boolean; collapseBlankBefore?: boolean }): this {
     for (const node of this.#nodes) {
-      this.#session.collector.remove(node.documentStartIndex, node.documentEndIndex)
+      if (options?.wholeLines) {
+        this.#session.collector.removeLines(node.documentStartIndex, node.documentEndIndex, options.collapseBlankBefore)
+        continue
+      }
+      let end = node.documentEndIndex
+      if (options?.separator) {
+        const comma = trailingSeparator(node)
+        if (comma) end = comma.documentEndIndex
+      }
+      this.#session.collector.remove(node.documentStartIndex, end)
     }
     return this
   }
@@ -435,6 +464,21 @@ export class Collection<G extends GrammarId = GrammarId> {
 /** Stringify a `code\`\`` interpolation: a `Collection` yields its (single-node) text. */
 function snippet(value: unknown): string {
   return value instanceof Collection ? value.text : String(value)
+}
+
+/** The `,` token immediately after `node` among its parent's children (comments skipped), or
+ *  `null` — the separator `remove({ separator: true })` drops alongside a list element. */
+function trailingSeparator(node: RichNode): RichNode | null {
+  const siblings = node.parent?.allChildren
+  if (!siblings) return null
+  const i = siblings.indexOf(node)
+  if (i === -1) return null
+  for (let j = i + 1; j < siblings.length; j++) {
+    const sib = siblings[j]
+    if (COMMENT_TYPES[sib.language].has(sib.type)) continue
+    return sib.type === ',' ? sib : null
+  }
+  return null
 }
 
 /** The opening delimiter token (`[` / `{` / `(`) of a container node. */

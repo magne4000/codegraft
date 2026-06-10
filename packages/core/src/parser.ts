@@ -19,6 +19,9 @@ const require = createRequire(import.meta.url)
 const VENDORED_WASM: Partial<Record<GrammarId, string>> = {
   typescript: 'tree-sitter-typescript.wasm',
   tsx: 'tree-sitter-tsx.wasm',
+  // tree-sitter-yaml ships no prebuilt wasm on the bare `tree-sitter-yaml` package; we vendor the
+  // one from `@tree-sitter-grammars/tree-sitter-yaml` so YAML imposes no peer dependency.
+  yaml: 'tree-sitter-yaml.wasm',
 }
 
 /**

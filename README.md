@@ -53,7 +53,7 @@ The authoring surface: a jscodeshift-style collection over the CST that records 
 - **Scope** (JS/TS/TSX, confident-or-abstain) — `references`, `definition`, `lookup`, `bindingsInScope`.
 - **Comments** — `addLeadingComment`/`addTrailingComment`, `removeComments`, `mapLeadingComment`, plus the `directive`/`dropDirective` gates.
 
-Node-type and field-name strings are **typed against the installed grammars** — `find`/`closest`/`isOfType` take a `NodeType` (every node type, and supertype, across JS/TS/TSX/HTML/CSS), `field`/`setField` and object-form matchers take a `FieldName`, and `node.type` is a `NodeTypeAll` — so a typo is a compile error with autocomplete. These unions are generated from each grammar's `node-types.json` (`@codegraft/core`'s `regen-node-types`).
+Node-type and field-name strings are **typed against the installed grammars** — `find`/`closest`/`isOfType` take a `NodeType` (every node type, and supertype, across JS/TS/TSX/HTML/CSS/YAML), `field`/`setField` and object-form matchers take a `FieldName`, and `node.type` is a `NodeTypeAll` — so a typo is a compile error with autocomplete. These unions are generated from each grammar's `node-types.json` (`@codegraft/core`'s `regen-node-types`).
 
 `Collection` is generic over the grammar, defaulting to all of them. Annotate `root` to narrow to one grammar's vocabulary — the type is **carried through navigation**, and `forTarget` then only accepts a matching bare-grammar target:
 
@@ -148,7 +148,7 @@ Codegraft's collection shape — `find` → navigate → edit — is modelled on
 
 | Tool | Foundation | Languages | Authoring | Output | Type-aware |
 |---|---|---|---|---|---|
-| **Codegraft** | tree-sitter (CST) | JS / TS / TSX, HTML, CSS, `.vue` | imperative collection | byte-range edits + source maps | no (syntactic) |
+| **Codegraft** | tree-sitter (CST) | JS / TS / TSX, HTML, CSS, YAML, `.vue` | imperative collection | byte-range edits + source maps | no (syntactic) |
 | [jscodeshift](https://github.com/facebook/jscodeshift) | Babel + recast (AST) | JS / TS / JSX / Flow | imperative collection + typed builders | recast reprint | no |
 | [ts-morph](https://ts-morph.com/) | TypeScript compiler | TS / JS | imperative, typed | compiler reprint | **yes** (full type checker) |
 | [Babel](https://babeljs.io/) plugins | Babel (AST) | JS / TS / JSX | visitor plugins | regenerate (recast optional) | no |
@@ -210,4 +210,4 @@ pnpm test      # vitest
 
 Requires Node ≥ 22.13 and pnpm 11.
 
-The node-type/field unions in `@codegraft/core/src/generated/node-types.ts` are checked in and regenerated with `pnpm --filter @codegraft/core regen-node-types` (CI fails if a regen is owed). It reads javascript/html/css from their npm packages and typescript/tsx from the vendored `node-types.json` that `regen-ts-wasm` writes alongside the wasm.
+The node-type/field unions in `@codegraft/core/src/generated/node-types.ts` are checked in and regenerated with `pnpm --filter @codegraft/core regen-node-types` (CI fails if a regen is owed). It reads javascript/html/css from their npm packages, typescript/tsx from the vendored `node-types.json` that `regen-ts-wasm` writes alongside the wasm, and yaml from the vendored copy alongside the `tree-sitter-yaml` wasm (from `@tree-sitter-grammars/tree-sitter-yaml`).

@@ -51,6 +51,43 @@ describe('defineCodemod — query + edits', () => {
     expect(t.transform('marker', {})).toBe('init()')
     expect(t.transform('init()', {})).toBe('init()') // already present → untouched
   })
+
+  it('findComments selects comment nodes (which find/children skip) and can remove them', async () => {
+    const t = await defineCodemod((root) => {
+      root.findComments(/drop/).remove()
+    }).forTarget('tsx')
+    expect(t.transform('a() // keep\nb() // drop me', {})).toBe('a() // keep\nb() ')
+  })
+
+  it('findComments without a pattern selects every comment in the subtree', async () => {
+    const t = await defineCodemod<{ count?: number }>((root, ctx) => {
+      ctx.count = root.findComments().size()
+    }).forTarget('css')
+    const ctx: { count?: number } = {}
+    t.transform('/* a */ x { y: 1 } /* b */', ctx)
+    expect(ctx.count).toBe(2)
+  })
+
+  it('findComments(pattern) removes a CSS comment by content', async () => {
+    const t = await defineCodemod((root) => {
+      root.findComments(/\$\$/).remove()
+    }).forTarget('css')
+    expect(t.transform('/* $$.marker */\na { color: red }', {})).toBe('\na { color: red }')
+  })
+
+  it('remove({ wholeLines }) deletes the whole line, leaving none blank', async () => {
+    const t = await defineCodemod((root) => {
+      root.findComments(/drop/).remove({ wholeLines: true })
+    }).forTarget('css')
+    expect(t.transform('a { x: 1 }\n  /* drop */\nb { y: 2 }\n', {})).toBe('a { x: 1 }\nb { y: 2 }\n')
+  })
+
+  it('remove({ collapseBlankBefore }) also eats a blank-line separator above', async () => {
+    const t = await defineCodemod((root) => {
+      root.findComments(/drop/).remove({ wholeLines: true, collapseBlankBefore: true })
+    }).forTarget('css')
+    expect(t.transform('a { x: 1 }\n\n/* drop */\nb { y: 2 }\n', {})).toBe('a { x: 1 }\nb { y: 2 }\n')
+  })
 })
 
 describe('defineCodemod — unwrap (nested collapse) + directives', () => {

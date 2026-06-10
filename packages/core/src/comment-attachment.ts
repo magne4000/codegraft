@@ -15,18 +15,20 @@ export const COMMENT_TYPES: Record<GrammarId, ReadonlySet<string>> = {
   tsx: new Set(['comment']),
   html: new Set(['comment']),
   css: new Set(['comment']),
+  yaml: new Set(['comment']),
 }
 
 /**
- * Classify every comment node and record it on the relevant `RichNode`'s
- * `leadingComments` / `trailingComments` / `innerComments` array. Mutates in place;
- * pure tree traversal, no parser dependency. Algorithm: §6 of the plan.
+ * Classify every comment among its parent's named siblings onto the relevant RichNode's
+ * leading/trailing/inner array. Mutates in place; pure traversal, no parser dependency.
  *
- * Each comment is classified among its parent's *named* siblings:
- * - no following non-comment sibling           → inner of the parent
- * - same row as the preceding non-comment node → trailing of that node
- * - exactly one row above the next node        → leading of that node
- * - otherwise (e.g. separated by a blank line) → inner of the parent (it floats)
+ * - same row as the preceding node             → trailing of it
+ * - in the contiguous comment run above a node → leading of that node
+ * - no following node, or a blank-line break   → inner of the parent (it floats)
+ *
+ * The run is "contiguous" when each comment sits a row below the previous and the last a row above
+ * the node, so a stack of comments all lead it (topmost first) — which lets a directive stacked
+ * above another comment still attach to the node it gates.
  */
 export function attachComments(root: RichNode): void {
   visit(root)
@@ -49,19 +51,37 @@ function classify(parent: RichNode): void {
     const comment = named[i]
     if (!isComment(comment)) continue
 
-    const prev = lastNonCommentBefore(named, i)
     const next = firstNonCommentAfter(named, i)
-
+    // No following node (e.g. a trailing comment tree-sitter absorbed as the last child) → inner.
     if (next === null) {
       parent.innerComments.push(comment)
-    } else if (prev !== null && comment.startPosition.row === prev.endPosition.row) {
-      prev.trailingComments.push(comment)
-    } else if (next.startPosition.row - comment.endPosition.row === 1) {
-      next.leadingComments.push(comment)
-    } else {
-      parent.innerComments.push(comment)
+      continue
     }
+
+    // A comment sharing a line with the preceding node trails it — this takes precedence over
+    // the leading block, so it is never also pulled into the next node's leading comments.
+    const prev = lastNonCommentBefore(named, i)
+    if (prev !== null && comment.startPosition.row === prev.endPosition.row) {
+      prev.trailingComments.push(comment)
+      continue
+    }
+
+    if (leadsContiguously(named, i, next)) next.leadingComments.push(comment)
+    else parent.innerComments.push(comment)
   }
+}
+
+/** Whether `named[i]` is in the unbroken comment run directly above `next` — every row from the
+ *  comment down to `next` filled by a comment, no blank-line gap. */
+function leadsContiguously(named: RichNode[], i: number, next: RichNode): boolean {
+  let expectedRow = named[i].endPosition.row + 1
+  for (let j = i + 1; j < named.length; j++) {
+    const node = named[j]
+    if (node === next) return node.startPosition.row === expectedRow
+    if (!isComment(node) || node.startPosition.row !== expectedRow) return false
+    expectedRow = node.endPosition.row + 1
+  }
+  return false
 }
 
 function lastNonCommentBefore(named: RichNode[], i: number): RichNode | null {

@@ -15,4 +15,6 @@ export const EXTENSION_GRAMMAR: Record<string, GrammarId> = {
   html: 'html',
   htm: 'html',
   css: 'css',
+  yaml: 'yaml',
+  yml: 'yaml',
 }

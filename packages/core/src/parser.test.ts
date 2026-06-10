@@ -14,6 +14,7 @@ describe('Parser', () => {
     ['tsx', 'const x = <div/>', 'program'],
     ['html', '<div>hi</div>', 'document'],
     ['css', 'a { color: red }', 'stylesheet'],
+    ['yaml', 'a: 1\nb:\n  - x\n', 'stream'],
   ]
   it.each(cases)('parses %s to the correct root with no errors', async (id, src, root) => {
     await Parser.loadGrammar(id)

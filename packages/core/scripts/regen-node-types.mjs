@@ -23,6 +23,8 @@ const SOURCES = {
   tsx: { nodeTypes: read('../vendor/tree-sitter-tsx.node-types.json'), version: `tree-sitter-typescript@${tsRef}` },
   html: fromPackage('tree-sitter-html', 'src/node-types.json'),
   css: fromPackage('tree-sitter-css', 'src/node-types.json'),
+  // Vendored alongside the wasm from `@tree-sitter-grammars/tree-sitter-yaml` (no bare-package wasm).
+  yaml: { nodeTypes: read('../vendor/tree-sitter-yaml.node-types.json'), version: '@tree-sitter-grammars/tree-sitter-yaml@0.7.1' },
 }
 
 function fromPackage(pkg, sub) {

@@ -5,7 +5,7 @@ import type { NodeTypeAll, FieldName } from './generated/node-types.js'
 
 /** A real tree-sitter grammar. There is no id for SFC file formats — those are
  *  handled by a {@link ZoneSplitter}, which maps each section to one of these. */
-export type GrammarId = 'javascript' | 'typescript' | 'tsx' | 'html' | 'css'
+export type GrammarId = 'javascript' | 'typescript' | 'tsx' | 'html' | 'css' | 'yaml'
 
 /** Row/column position, mirroring tree-sitter's `Point`. */
 export type Point = { row: number; column: number }
