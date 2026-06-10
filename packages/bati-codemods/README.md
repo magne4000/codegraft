@@ -123,8 +123,10 @@ out = prune.transform(out, {})             // 3. remove now-unused imports
 
 Order matters: collapsing first means an import removed by a false condition is gone before
 `batiImports` records the graph (mirroring Bati's `deleteImport`). `removeUnusedImports` runs last.
-`.vue` SFCs: pass `vueSplitter` as the target (the `<script>` zone is transformed; template/style
-are left to the HTML/CSS-side syntaxes, which are out of scope here).
+`.vue` SFCs: pass `vueSplitter` as the target. The codemod runs over every zone, so the `<script>`
+gets the full treatment and the `<template>` (an `html` zone) gets `<!-- $$.BATI.has(…) -->` element
+gating via the same comment-gate. Only `{{ … }}` interpolations and `v-if`/binding expressions are
+out of reach — tree-sitter leaves them as raw text, so a `$$` condition inside them isn't seen.
 
 ## `ctx` out-channel
 
@@ -158,5 +160,7 @@ so the codemods report through it: `batiCodemod` sets `ctx.includeIfImported`, `
   operator) makes `evaluate` throw, naming the node — same loud-failure contract as Bati.
 - Block limitation: a block nested across a *different* container (e.g. inside `@media`) inside a
   *dead* branch isn't handled; same-container nesting is. Bati's boilerplates don't nest blocks.
-- Still out of scope: HTML-template element gating (`<!-- BATI.has -->`) beyond what the generic
-  block form covers, and Bati's `setComposeEnvironment` helper (a non-conditional YAML edit).
+- Vue/html `<template>`: element gating (`<!-- $$.BATI.has(…) -->`) is covered by the comment-gate.
+  Still out of reach: `{{ … }}` interpolation and `v-if`/binding expressions — tree-sitter parses
+  them as raw text, so they'd need a Vue-template splitter that extracts those as JS sub-zones.
+- Out of scope: Bati's `setComposeEnvironment` helper (a non-conditional YAML edit).

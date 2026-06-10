@@ -184,8 +184,9 @@ export const batiCodemod = defineCodemod<BatiContext>({ namespace: '$$' }, (root
 
 export default batiCodemod
 
-/** The targets this codemod handles directly; `.vue` `<script>` is reached via a `ZoneSplitter`. */
-export const targets: GrammarId[] = ['javascript', 'typescript', 'tsx']
+/** The targets this codemod handles directly (`html` for `<!-- $$.… -->` element gating); a `.vue`
+ *  SFC is reached via a `ZoneSplitter`, which routes its `<script>` and `<template>` zones here. */
+export const targets: GrammarId[] = ['javascript', 'typescript', 'tsx', 'html']
 
 /** Whether an `if`/ternary condition references the `$$` namespace (else it is left alone). */
 function usesNamespace(condition: Collection): boolean {

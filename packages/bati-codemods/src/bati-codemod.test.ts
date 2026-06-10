@@ -340,6 +340,39 @@ describe('bati codemod — Vue SFC (multi-zone)', () => {
   })
 })
 
+describe('bati codemod — html element gating (<!-- $$.BATI.has(…) -->)', () => {
+  it('gates the next element on an html comment directive', async () => {
+    const t = await on('html')
+    const src = '<!-- $$.BATI.has("vue") -->\n<Link href="/todo">Todo</Link>\n<span>keep</span>'
+    expect(norm(t.transform(src, bati(['vue'])))).toBe('<Link href="/todo">Todo</Link> <span>keep</span>')
+    const off = t.transform(src, bati())
+    expect(off).not.toContain('Todo')
+    expect(off).toContain('<span>keep</span>')
+  })
+
+  it('reaches the <template> zone of a .vue SFC and the <script> in one pass', async () => {
+    const t = await on(vueSplitter)
+    const sfc = [
+      '<template>',
+      '  <!-- $$.BATI.has("vue") -->',
+      '  <Link href="/todo">Todo</Link>',
+      '  <h1>{{ title }}</h1>',
+      '</template>',
+      '',
+      '<script setup lang="ts">',
+      'const title = $$.BATI.has("vue") ? "Vue" : "Other"',
+      '</script>',
+    ].join('\n')
+    const on1 = t.transform(sfc, bati(['vue']))
+    expect(on1).toContain('Todo') // template element kept
+    expect(on1).toContain('const title = "Vue"') // script ternary collapsed
+    expect(on1).toContain('<h1>{{ title }}</h1>') // runtime interpolation untouched
+    const off = t.transform(sfc, bati())
+    expect(off).not.toContain('Todo') // template element removed
+    expect(off).toContain('const title = "Other"')
+  })
+})
+
 describe('batiYaml — # $$.BATI… line gating (clean output, no residual blank lines)', () => {
   const yaml = async (ctx: BatiContext, src: string) => (await batiYaml.forTarget('yaml')).transform(src, ctx)
 
