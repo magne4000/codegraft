@@ -134,6 +134,43 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('const a = [\n  1,\n  //# x\n  two(),\n  3,\n];', {})).toBe('const a = [\n  1,\n  \n  3,\n];')
   })
 
+  it('removes a node inside an unwrapped block under format (the two deletes compose)', async () => {
+    // `unwrap` deletes the wrapper up to the kept body's first node, including that node's indent; a
+    // following `remove` of that node abuts the unwrap delete and still lands (it must not be rejected
+    // for overlapping the already-gone indent).
+    const t = await defineCodemod({ format: true }, (root) => {
+      const ifst = root.find('if_statement').first()
+      const stmts = ifst.field('consequence').children()
+      ifst.unwrap(stmts)
+      stmts.first().remove()
+    }).forTarget('tsx')
+    expect(t.transform('if (a) {\n  drop();\n  keep();\n}', {})).toBe('  keep();')
+  })
+
+  it('drops a directive and the comments stacked under it, up to the node, under format', async () => {
+    // The contract is "the directive and the gap up to the node": the `///<reference>` below the
+    // directive is part of that gap and must go too — not be left behind when only its line collapses.
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.children().first().dropDirective(/x/)
+    }).forTarget('tsx')
+    expect(t.transform('//# x\n/// <reference types="y" />\nconst a = 1;', {})).toBe('const a = 1;')
+  })
+
+  it('collapses nested conditionals in one pass under format (unwrap then remove inside)', async () => {
+    // Bati's one-pass collapse: unwrap a kept block, then descend and remove a dropped sibling inside
+    // it. The inner remove must compose with the outer unwrap rather than be rejected for abutting it.
+    const collapse = defineCodemod<Record<string, boolean>>({ namespace: '$$', format: true }, (root, ctx) => {
+      root.find('if_statement').forEach((node) => {
+        const cond = node.field('condition')
+        if (!cond.text.includes('$$')) return
+        if (cond.evaluate(ctx)) node.unwrap(node.field('consequence').children())
+        else node.remove()
+      })
+    })
+    const t = await collapse.forTarget('tsx')
+    expect(t.transform('if ($$.a) {\n  if ($$.b) {\n    yes();\n  }\n  no();\n}', { a: true, b: false })).toBe('  no();')
+  })
+
   it('is off by default — an appended statement still lands at column 0', async () => {
     const t = await defineCodemod((root) => {
       root.find('statement_block').first().append('c()')

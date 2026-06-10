@@ -455,12 +455,12 @@ export class Collection<G extends GrammarId = GrammarId> {
     const node = this.#single()
     const comment = node.leadingComments.find((c) => pattern.test(c.text))
     if (!comment) return this
-    // Under format, collapse the directive's own line and stop there, leaving the node's line for a
-    // following `remove` to collapse independently — the two deletes land on separate lines and
-    // compose. Reaching into the node's line (the verbatim `[comment, node)` delete) would instead
-    // overlap that `remove` and, first-wins, get it dropped. Off: verbatim delete of the comment and
-    // the gap up to the node, residual whitespace left for the downstream formatter.
-    if (this.#session.style) this.#session.collector.removeFormatted(comment.documentStartIndex, comment.documentEndIndex)
+    // The contract is "drop the directive and the gap up to the node" — so removal still runs to the
+    // node, taking any comments stacked under the directive with it. Under format it collapses those
+    // whole lines but stops at the node's line, leaving the node's own line for a following `remove`
+    // to collapse independently: the two deletes abut at the node's line start and compose. Off: the
+    // verbatim `[comment, node)` delete, residual whitespace left for the downstream formatter.
+    if (this.#session.style) this.#session.collector.removeUpToLine(comment.documentStartIndex, node.documentStartIndex)
     else this.#session.collector.remove(comment.documentStartIndex, node.documentStartIndex)
     return this
   }
