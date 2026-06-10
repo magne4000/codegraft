@@ -33,6 +33,21 @@ export class EditCollector {
     this.#magic.remove(start, end)
   }
 
+  /** Format-aware delete of `[start, end)`: when the span owns its line(s) — only indentation
+   *  before `start`, only whitespace after `end` up to the line break — drop the whole lines so no
+   *  blank line is left behind; otherwise an in-line delete. Used under `format` so removing an
+   *  own-line node collapses its line the way Prettier would, while an inline element (`[1, x, 3]`)
+   *  is left untouched around the hole. */
+  removeFormatted(start: number, end: number): void {
+    const lineStart = this.#lineStart(start)
+    const lineEnd = this.#source.indexOf('\n', end)
+    const trailing = this.#source.slice(end, lineEnd === -1 ? this.#source.length : lineEnd)
+    const ownsLines = this.#source.slice(lineStart, start).trim() === '' && trailing.trim() === ''
+    // Owns its line(s) ⇒ a whole-lines removal (no blank left behind); otherwise delete just the span.
+    if (ownsLines) this.removeLines(start, end)
+    else this.remove(start, end)
+  }
+
   /** Delete the whole lines `[start, end)` touches — from the start of `start`'s line (leading
    *  indentation included) through the newline after `end`'s line, so nothing blank is left behind.
    *  With `collapseBlankBefore`, also absorb whole blank lines immediately above (a separator before

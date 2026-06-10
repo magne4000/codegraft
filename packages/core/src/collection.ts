@@ -265,6 +265,10 @@ export class Collection<G extends GrammarId = GrammarId> {
    * - `separator`: also drop the trailing `,` of a list element, leaving no array hole / dangling comma.
    * - `wholeLines`: remove the whole lines the node spans (a full-line comment, a YAML entry), so no
    *   blank line is left; `collapseBlankBefore` additionally absorbs a blank-line separator directly above.
+   *
+   * Under `format`, a node that owns its line(s) collapses that line automatically (no leftover blank),
+   * while an inline element is left untouched around the hole — so `wholeLines` is only needed to force
+   * whole-line removal where the codemod can't opt in per node (and for `collapseBlankBefore`).
    */
   remove(options?: { separator?: boolean; wholeLines?: boolean; collapseBlankBefore?: boolean }): this {
     for (const node of this.#nodes) {
@@ -277,7 +281,10 @@ export class Collection<G extends GrammarId = GrammarId> {
         const comma = trailingSeparator(node)
         if (comma) end = comma.documentEndIndex
       }
-      this.#session.collector.remove(node.documentStartIndex, end)
+      // Formatting on: collapse the line when the node owned it, the way Prettier did before it was
+      // dropped. Off: verbatim delete, leaving residual blank lines for the downstream formatter.
+      if (this.#session.style) this.#session.collector.removeFormatted(node.documentStartIndex, end)
+      else this.#session.collector.remove(node.documentStartIndex, end)
     }
     return this
   }
