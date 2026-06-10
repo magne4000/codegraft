@@ -15,7 +15,7 @@ export interface ConfigObject {
   [key: string]: ConfigValue
 }
 
-/** The object literal passed to `defineConfig(...)`. Empty when the file has no such call. */
+/** The object literal argument of the file's `defineConfig(...)` call. */
 export function defineConfigArg(root: Collection): Collection {
   return root.find('call_expression', { function: 'defineConfig' }).first().field('arguments').children().first()
 }

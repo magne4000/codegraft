@@ -86,9 +86,23 @@ defineCodemod((root) => {
 - Import / statement injection (e.g. Bati's `imports.$prepend` + `builders.functionCall`) needs no helper
   — use core's `ensureImport` and `insertBefore`.
 
+### `.d.ts` merge
+
+- **`mergeDts`** (target `typescript`) — Bati's `merge-dts`. A 2-input merge re-cast as single-source:
+  **concatenate** the files and run it. Same-named `declare global` / `declare module` / `namespace`
+  blocks fold into the first **recursively**; same-named `interface`s union their members (deduped);
+  imports are hoisted + deduped; `export {}` / other statements dedupe by text.
+
+  ```ts
+  const t = await mergeDts.forTarget('typescript')
+  const merged = t.transform(`${fileA}\n${fileB}`, {}) // then format with Prettier
+  ```
+
+  Two files merge exactly; with three or more, a declaration absent from the first file but repeated in
+  later ones is left as a duplicate for TypeScript's own declaration merging.
+
 Not ported: `package.json`/`tsconfig` edits (`PackageJsonTransformer`/`loadAsJson` are JSON-object
-manipulation, not AST — codegraft has no JSON grammar) and the 2-input `.d.ts` merge (`merge-dts.ts`
-combines two modules, outside the single-source `transform(source)` model).
+manipulation, not AST — codegraft has no JSON grammar).
 
 ### Run order
 
