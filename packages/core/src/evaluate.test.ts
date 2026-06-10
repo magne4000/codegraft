@@ -27,6 +27,16 @@ describe('evaluate', () => {
     expect(evaluate(condition('$$.mode'), ctx())).toBe('dev')
   })
 
+  it('calls a method on its object, preserving the receiver', () => {
+    // Bati's `meta.BATI` is a real Set subclass; `Set.prototype.has` throws on a detached receiver.
+    expect(evaluate(condition('$$.BATI.has("x")'), { BATI: new Set(['x']) })).toBe(true)
+    expect(evaluate(condition('$$.BATI.has("y")'), { BATI: new Set(['x']) })).toBe(false)
+  })
+
+  it('asserts on a call that is not a method on the context', () => {
+    expect(() => evaluate(condition('$$("x")'), ctx())).toThrow(/only method calls are supported/)
+  })
+
   it('composes !, &&, ||, parentheses, and comparisons', () => {
     expect(evaluate(condition('$$.BATI.has("auth") && !$$.BATI.has("admin")'), ctx('auth'))).toBe(true)
     expect(evaluate(condition('$$.BATI.has("auth") && $$.BATI.has("admin")'), ctx('auth'))).toBe(false)

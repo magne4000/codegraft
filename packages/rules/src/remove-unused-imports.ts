@@ -1,12 +1,14 @@
-import type { Collection, GrammarId } from '@codegraft/core'
+import type { Collection, GrammarId, RichNode } from '@codegraft/core'
 import { defineCodemod } from '@codegraft/codemod'
 
 /**
  * Remove imports with no reference, and rewrite a value import used only in type positions into a
  * type import — the analogue of `eslint-plugin-unused-imports` plus the import half of
- * `@typescript-eslint/consistent-type-imports`. Syntactic and single-file; confident-or-abstain, so
- * a binding the scope resolver can't resolve is left untouched rather than deleted. Runs on every
- * JS-family grammar and, through a `ZoneSplitter`, the `<script>` of a Vue SFC.
+ * `@typescript-eslint/consistent-type-imports`. Syntactic and single-file, confident-or-abstain: an
+ * import whose use isn't decidable is kept. The scope resolver's rename-safety abstentions (a TS
+ * namespace, `declare module`) don't block pruning — a syntactic use-scan covers them; only `with`
+ * and `eval`, which can reach a name invisibly, force a no-op. Runs on every JS-family grammar and,
+ * through a `ZoneSplitter`, the `<script>` of a Vue SFC.
  */
 export const removeUnusedImports = defineCodemod((root) => {
   // The resolver reports only value (`identifier`) references, so type-position uses are gathered
@@ -17,6 +19,33 @@ export const removeUnusedImports = defineCodemod((root) => {
     const head = qualified.field('module')
     if (head.type === 'identifier') typeRefs.add(head.text)
   })
+
+  // The resolver abstains on the whole file at a construct it can't rename through — a TS namespace,
+  // `declare module`/`declare global`. Use-detection still holds (an import is used iff its name
+  // appears as a value identifier), so scan — unless `with`/`eval` can reach a name invisibly (null).
+  let fallback: { dynamic: boolean; refs: Map<string, RichNode[]> } | undefined
+  const syntacticRefs = (name: string): RichNode[] | null => {
+    if (!fallback) {
+      const dynamic =
+        root.find('with_statement').size() > 0 || root.find('call_expression', { function: 'eval' }).size() > 0
+      const refs = new Map<string, RichNode[]>()
+      if (!dynamic) {
+        // Value uses lex as `identifier` (call, `typeof x`, JSX tag, `member_expression` head) or
+        // `shorthand_property_identifier` (`{ x }`); a `.member`/key is a `property_identifier`. The
+        // import's own specifiers are `identifier`s too, so skip anything inside an import statement.
+        const add = (node: RichNode): void => {
+          for (let a = node.parent; a; a = a.parent) if (a.type === 'import_statement') return
+          const list = refs.get(node.text)
+          if (list) list.push(node)
+          else refs.set(node.text, [node])
+        }
+        root.find('identifier').nodes().forEach(add)
+        root.find('shorthand_property_identifier').nodes().forEach(add)
+      }
+      fallback = { dynamic, refs }
+    }
+    return fallback.dynamic ? null : (fallback.refs.get(name) ?? [])
+  }
 
   interface Binding {
     /** A named specifier (`{ x }`), as opposed to a default or `* as ns`. */
@@ -54,12 +83,13 @@ export const removeUnusedImports = defineCodemod((root) => {
     // Keep each referenced binding, recording whether its only references are type-position ones.
     const kept: Kept[] = []
     for (const binding of bindings) {
-      const references = binding.local.references()
-      if (!references) return // resolver abstains on this file — leave the statement untouched
+      const resolved = binding.local.references()
+      const refNodes = resolved ? resolved.nodes() : syntacticRefs(binding.local.text)
+      if (!refNodes) return // resolver abstained and `with`/`eval` make use-detection unsound — skip
       const declaration = binding.local.node
       const valueUsed =
         !binding.isType &&
-        references.nodes().some((ref) => {
+        refNodes.some((ref) => {
           // A qualified-type head (`NS.Thing`) lexes as a value identifier but is a type use.
           const parent = ref.parent
           return ref !== declaration && !(parent?.type === 'nested_type_identifier' && parent.child('module') === ref)

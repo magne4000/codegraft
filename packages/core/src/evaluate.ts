@@ -45,10 +45,15 @@ function evalNode(node: RichNode, context: unknown): unknown {
       return object[field(node, 'property').text]
     }
     case 'call_expression': {
-      const callee = evalNode(field(node, 'function'), context)
-      assert(typeof callee === 'function', `not callable: '${field(node, 'function').text}'`)
+      // A condition's only calls are methods on the context (`$$.BATI.has(x)`); calling the method on
+      // its object preserves the receiver, so one whose `this` matters (a real `Set`'s `has`) works.
+      const callee = field(node, 'function')
+      assert(callee.type === 'member_expression', `only method calls are supported: '${node.text}'`)
+      const object = evalNode(field(callee, 'object'), context) as Record<string, unknown>
+      const method = object[field(callee, 'property').text]
+      assert(typeof method === 'function', `not callable: '${callee.text}'`)
       const args = field(node, 'arguments').children.map((arg) => evalNode(arg, context))
-      return (callee as (...args: unknown[]) => unknown)(...args)
+      return (method as (...args: unknown[]) => unknown).apply(object, args)
     }
     case 'identifier':
       return context // the namespace root resolves to the context value
