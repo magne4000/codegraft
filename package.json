@@ -9,6 +9,8 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bump": "pnpm --filter '@codegraft/*' version --no-git-tag-version",
+    "bump:beta": "pnpm --filter '@codegraft/*' version --no-git-tag-version --preid beta prerelease",
     "release": "pnpm build && pnpm test && pnpm -r publish --access public --no-git-checks",
     "release:beta": "pnpm build && pnpm test && pnpm -r publish --access public --tag beta --no-git-checks"
   },
