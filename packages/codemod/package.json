@@ -1,6 +1,6 @@
 {
   "name": "@codegraft/codemod",
-  "version": "0.1.0-beta.4",
+  "version": "0.1.0-beta.5",
   "description": "Authoring API for Codegraft codemods: defineCodemod and a jscodeshift-style collection over the CST.",
   "license": "MIT",
   "type": "module",
