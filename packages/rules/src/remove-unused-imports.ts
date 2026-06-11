@@ -162,7 +162,7 @@ export const removeUnusedImports = defineCodemod((root) => {
       kept.push({ ...binding, typeOnly: !valueUsed })
     }
     if (kept.length === 0) {
-      stmt.remove()
+      stmt.remove({ separator: true }) // drop the whole import line, leaving no blank behind
       return
     }
 

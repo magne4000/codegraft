@@ -203,19 +203,19 @@ Every consumer — `forTarget`, `codegraft run`, and `@codegraft/unplugin` — r
 
 ### Formatting
 
-Because Codegraft edits byte ranges rather than reprinting, **code you don't touch keeps its exact formatting for free** — there's no reprint step to disturb it (recast's headline feature, but unconditional here). What's left is the *inserted* and *removed* text, and that's where a small `Formatter` renders each edit layout-aware — on every transform. It detects the file's indent unit and line ending (a `detect-indent`-style guess, falling back to two spaces / `\n`) and:
+Because Codegraft edits byte ranges rather than reprinting, **code you don't touch keeps its exact formatting for free** — there's no reprint step to disturb it (recast's headline feature, but unconditional here). For the text it *does* touch, a small `Formatter` renders each edit only as far as **syntactic validity**, leaving cosmetics to whatever formatter you already run (Prettier, Biome, …):
 
-- re-indents what `replaceWith`/`append`/`prepend`/`insertBefore`/`insertAfter`/`addLeadingComment`/`ensureImport` record — matching the surrounding indentation, preserving the snippet's own internal indentation;
-- collapses the line a removed node owned, so no blank line is left behind;
-- lays an element appended/prepended to a multi-line array/object/interface on its own line, separator-matched to the surrounding layout (an inline container stays inline).
+- an inserted snippet (`replaceWith`/`insertBefore`/`insertAfter`/`addLeadingComment`/`ensureImport`) is re-indented to its anchor line — preserving the snippet's own internal indentation, line breaks normalised to the source's detected EOL;
+- `append`/`prepend` give the new element its container's separator (a `,` / `;` / line break) so it parses;
+- `remove` is a plain delete; `{ separator: true }` also drops the element's delimiter — a list comma (no `[1, , 3]` hole / invalid member) or a statement's trailing line (no blank left where it sat).
 
 ```ts
-// appending into:   function f() {␊  a()␊}
-root.find('statement_block').first().append('b()')
-// →  function f() {␊  a()␊  b()␊}          (the new statement adopts the block's indent)
+// replacing  gen()  in:   function f() {␊  gen()␊}
+root.find('call_expression', { function: 'gen' }).replaceWith('function g() {␊  return 1␊}')
+// →  function f() {␊  function g() {␊    return 1␊  }␊}     (the snippet adopts the call's indent)
 ```
 
-The detected style is overridable per apply — `transform(src, ctx, { indentUnit: '\t', eol: '\r\n' })` (a `FormatOptions`) — the seam prettier-like options (trailing comma, semicolons, quotes, print width) will grow on. It's a guess, not a full formatter: it handles indentation, EOLs, and structural layout, and leaves quote style to the snippet you write.
+Beyond that it does **no** cosmetic layout — an appended element isn't reflowed onto its own line, a removed node's blank line isn't collapsed. That's deliberate: Codegraft isn't a formatter, and pairing it with one (which generated projects run anyway) keeps the engine small and free of style opinions that would only fight your Prettier/Biome config.
 
 ## Development
 
