@@ -14,7 +14,8 @@
   "bugs": "https://github.com/magne4000/codegraft/issues",
   "files": [
     "dist",
-    "wasm"
+    "wasm",
+    "vendor/web-tree-sitter"
   ],
   "exports": {
     ".": {
@@ -33,15 +34,16 @@
     "build": "tsc -b",
     "regen-ts-wasm": "bash scripts/regen-ts-wasm.sh",
     "regen-builtin-wasm": "bash scripts/regen-builtin-wasm.sh",
+    "regen-web-tree-sitter": "bash scripts/regen-web-tree-sitter.sh",
     "regen-node-types": "node scripts/regen-node-types.mjs"
   },
   "dependencies": {
-    "magic-string": "^0.30.0",
-    "web-tree-sitter": "^0.26.9"
+    "magic-string": "^0.30.0"
   },
   "devDependencies": {
     "tree-sitter-css": "^0.25.0",
     "tree-sitter-html": "^0.23.0",
-    "tree-sitter-javascript": "^0.25.0"
+    "tree-sitter-javascript": "^0.25.0",
+    "web-tree-sitter": "^0.26.9"
   }
 }

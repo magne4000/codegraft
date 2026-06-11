@@ -1,4 +1,4 @@
-import type { Node } from 'web-tree-sitter'
+import type { Node } from '../vendor/web-tree-sitter/web-tree-sitter.js'
 import type { GrammarId, Point, RichNode } from './types.js'
 import type { NodeTypeAll, FieldName } from './generated/node-types.js'
 import { isComment } from './comment-attachment.js'

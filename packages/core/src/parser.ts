@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { Language, Parser as TreeSitter } from 'web-tree-sitter'
-import type { Tree } from 'web-tree-sitter'
+// web-tree-sitter is vendored, not a runtime dependency: the bare npm package ships ~4.6 MB (debug
+// build, source maps, CJS), of which we load only the release ESM glue + engine wasm. The glue finds
+// its wasm sibling via `import.meta.url`, so importing the vendored file is enough — no peer, no
+// `locateFile`. See scripts/regen-web-tree-sitter.sh.
+import { Language, Parser as TreeSitter } from '../vendor/web-tree-sitter/web-tree-sitter.js'
+import type { Tree } from '../vendor/web-tree-sitter/web-tree-sitter.js'
 import type { GrammarId } from './types.js'
 import { assert } from './assert.js'
 
