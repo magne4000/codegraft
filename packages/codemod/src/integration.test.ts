@@ -136,4 +136,25 @@ describe('codemod integration — the Bati transform', () => {
     expect(off).not.toContain('<nav') // whole element dropped
     expect(off).not.toContain('menu')
   })
+
+  // Tier 2: template expressions are real JS zones, so the *unchanged* Bati ternary collapse reaches
+  // inside `{{ }}` and `:bind` — the headline-feature payoff with no codemod change.
+  it('collapses a $$ ternary inside an interpolation and a binding (template expression zones)', async () => {
+    const t = await batiCodemod.forTarget(vueSplitter)
+    const sfc = [
+      '<template>',
+      `  <h1>{{ $$.BATI.has('auth') ? 'Dash' : 'Home' }}</h1>`,
+      `  <button :disabled="$$.BATI.has('auth') ? busy : true">go</button>`,
+      '</template>',
+    ].join('\n')
+
+    const on = t.transform(sfc, bati('auth'))
+    expect(on).toContain(`{{ 'Dash' }}`)
+    expect(on).toContain('<button :disabled="busy">')
+    expect(on).not.toContain('$$')
+
+    const off = t.transform(sfc, bati())
+    expect(off).toContain(`{{ 'Home' }}`)
+    expect(off).toContain('<button :disabled="true">')
+  })
 })

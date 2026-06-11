@@ -16,6 +16,11 @@ type RawZone = { language: GrammarId; source: string; startOffset: number }
  * stay structural), `<script>`/`<script setup>` a `typescript`/`tsx`/`javascript` zone
  * (by `lang`), and `<style>` a `css` zone — each carrying the exact document offset of
  * its content.
+ *
+ * The template additionally yields one `typescript` zone per embedded expression —
+ * interpolation bodies, directive values, dynamic directive arguments — so a codemod sees
+ * real JS nodes inside it (see {@link templateExpressionZones}). These overlap the
+ * structural `vue` zone: structure edits land on vue nodes, expression edits on these.
  */
 export const vueSplitter: ZoneSplitter = {
   id: 'vue',
@@ -33,6 +38,7 @@ export const vueSplitter: ZoneSplitter = {
     for (const section of namedChildren(root)) {
       const zone = sectionZone(section, source)
       if (zone) zones.push(zone)
+      if (section.type === 'template_element') zones.push(...templateExpressionZones(section, source))
     }
     return zones
   },
@@ -66,6 +72,90 @@ function sectionZone(section: Node, source: string): RawZone | null {
     default:
       return null
   }
+}
+
+/**
+ * Every JS expression embedded in the template — interpolation bodies, directive values, and dynamic
+ * directive arguments (`:[expr]`) — as its own zone, so a codemod sees real `identifier` /
+ * `member_expression` / … nodes (use-detection, `$$` collapse, migrations) instead of opaque text.
+ * Offsets are document-absolute (this walk runs over the whole-SFC parse), so edits map straight back.
+ *
+ * Values are parsed as **TypeScript**: a superset for expressions, it accepts template `as` casts and
+ * avoids the JSX ambiguity a `tsx` parse would give `a < b`. The classifier is deliberately small —
+ * `v-for` (keep only the iterable; its alias introduces template-locals) and `v-slot` (a binding
+ * pattern, no references) are the sole special cases; every other value is emitted whole. A value that
+ * is a bare object literal (`:class="{ a: x }"`) parses in statement position as a block, not an
+ * object — identifiers inside still surface, but structural edits targeting the object won't match.
+ */
+function templateExpressionZones(template: Node, source: string): RawZone[] {
+  const zones: RawZone[] = []
+  const visit = (node: Node): void => {
+    if (node.type === 'interpolation') {
+      const body = childByType(node, 'raw_text')
+      if (body) pushExpr(zones, body.text, body.startIndex)
+      return
+    }
+    if (node.type === 'directive_attribute') {
+      collectDirective(node, source, zones)
+      return
+    }
+    for (const child of namedChildren(node)) visit(child)
+  }
+  visit(template)
+  return zones
+}
+
+// `(item, i) in items` / `item of items` → capture the alias and the iterable separately; the lazy
+// first group stops at the first ` in `/` of `, matching Vue's own `forAliasRE`.
+const FOR_ALIAS_RE = /([\s\S]*?)\s+(?:in|of)\s+([\s\S]*)/
+
+function collectDirective(attr: Node, source: string, zones: RawZone[]): void {
+  // `:[expr]` — the dynamic argument is itself a reference expression, regardless of the value.
+  const dynamic = firstDescendant(attr, 'dynamic_directive_inner_value')
+  if (dynamic) pushExpr(zones, dynamic.text, dynamic.startIndex)
+
+  const value = firstDescendant(attr, 'attribute_value')
+  if (!value) return // valueless directive (`v-else`, `v-pre`, `#default`, …)
+
+  const kind = directiveKind(attr, source)
+  if (kind === 'slot') return // `v-slot`/`#` value is a binding pattern — locals, not references
+  if (kind === 'for') {
+    const m = FOR_ALIAS_RE.exec(value.text) // keep only the iterable; the alias is a template-local
+    if (m) pushExpr(zones, m[2], value.startIndex + (value.text.length - m[2].length))
+    return
+  }
+  pushExpr(zones, value.text, value.startIndex)
+}
+
+/** `v-for` and `v-slot` need special value handling; every other directive's value is a plain
+ *  expression. The vue CST collapses `:`/`@`/`#` shorthands to a bare `directive_value`, so the slot
+ *  shorthand is recovered from the `#` sigil immediately preceding the argument. */
+function directiveKind(attr: Node, source: string): 'for' | 'slot' | 'expr' {
+  const name = childByType(attr, 'directive_name')
+  if (name) {
+    if (name.text === 'v-for') return 'for'
+    if (name.text === 'v-slot') return 'slot'
+    return 'expr'
+  }
+  const arg = childByType(attr, 'directive_value')
+  if (arg && source[arg.startIndex - 1] === '#') return 'slot'
+  return 'expr'
+}
+
+function pushExpr(zones: RawZone[], source: string, startOffset: number): void {
+  if (source.trim() === '') return // empty `{{ }}` / `:x=""` — nothing to parse
+  zones.push({ language: 'typescript', source, startOffset })
+}
+
+/** Depth-first search for the first descendant of `type` (the value/argument nodes sit a level or
+ *  two below `directive_attribute`, under `quoted_attribute_value` / `dynamic_directive_value`). */
+function firstDescendant(node: Node, type: string): Node | null {
+  for (const child of namedChildren(node)) {
+    if (child.type === type) return child
+    const nested = firstDescendant(child, type)
+    if (nested) return nested
+  }
+  return null
 }
 
 function scriptLanguage(startTag: string): GrammarId {

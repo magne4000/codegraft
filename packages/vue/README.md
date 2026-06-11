@@ -5,15 +5,23 @@ zones so a Codegraft codemod applies per section:
 
 | Section | Grammar |
 |---|---|
-| `<template>` | `vue` |
+| `<template>` | `vue` (+ one `typescript` zone per embedded expression) |
 | `<script>` / `<script setup>` | `typescript` / `tsx` / `javascript` (by `lang`) |
 | `<style>` | `css` |
 
 The `<template>` is parsed with the **vue** grammar (not `html`), so a codemod matches its structure
 directly — `interpolation`, `directive_attribute` (`directive_name` / `directive_value` /
 `attribute_value`), component `tag_name`. The grammar's node types are generated into Codegraft's
-typed unions, so `find('directive_attribute')` autocompletes and type-checks like any other. (Embedded
-template *expressions* are still opaque text inside those nodes — parsing them as JS is a later tier.)
+typed unions, so `find('directive_attribute')` autocompletes and type-checks like any other.
+
+Every JS expression embedded in the template — interpolation bodies, directive values, and dynamic
+arguments (`:[expr]`) — additionally becomes its own `typescript` zone, so the same codemod sees real
+`identifier` / `member_expression` / … nodes inside the template (use-detection, `$$` collapse,
+migrations) rather than opaque text. `v-for` contributes only its iterable (the alias is a
+template-local) and `v-slot` patterns are skipped (locals, not references). These zones overlap the
+structural `vue` zone — structure edits land on the vue nodes, expression edits on the `typescript`
+ones; a value that is a bare object literal (`:class="{ a: x }"`) parses in statement position as a
+block, so identifiers inside it still surface but structural edits targeting the object won't match.
 
 ```ts
 import { vueSplitter } from '@codegraft/vue'
