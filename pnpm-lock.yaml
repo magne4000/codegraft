@@ -46,9 +46,6 @@ importers:
       magic-string:
         specifier: ^0.30.0
         version: 0.30.21
-      web-tree-sitter:
-        specifier: ^0.26.9
-        version: 0.26.9
     devDependencies:
       tree-sitter-css:
         specifier: ^0.25.0
@@ -59,6 +56,9 @@ importers:
       tree-sitter-javascript:
         specifier: ^0.25.0
         version: 0.25.0
+      web-tree-sitter:
+        specifier: ^0.26.9
+        version: 0.26.9
 
   packages/rules:
     dependencies:
