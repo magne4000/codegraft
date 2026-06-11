@@ -5,9 +5,13 @@
 import type { NodeTypeAll, FieldName } from './generated/node-types.js'
 import type { FormatOptions } from './format.js'
 
-/** A real tree-sitter grammar. There is no id for SFC file formats — those are
- *  handled by a {@link ZoneSplitter}, which maps each section to one of these. */
-export type GrammarId = 'javascript' | 'typescript' | 'tsx' | 'html' | 'css' | 'yaml'
+/**
+ * A real tree-sitter grammar. SFC *file formats* have no id of their own — a {@link ZoneSplitter}
+ * maps each section to one of these. `'vue'` is the exception: it is a real tree-sitter grammar
+ * (used for a `.vue` `<template>` zone) but its wasm ships with `@codegraft/vue`, not core, so it is
+ * loaded by the splitter's `init()` (via `loadGrammar`'s path form) rather than resolved as built-in.
+ */
+export type GrammarId = 'javascript' | 'typescript' | 'tsx' | 'html' | 'css' | 'yaml' | 'vue'
 
 /** Row/column position, mirroring tree-sitter's `Point`. */
 export type Point = { row: number; column: number }

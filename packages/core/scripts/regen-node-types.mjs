@@ -25,6 +25,10 @@ const SOURCES = {
   css: fromPackage('tree-sitter-css', 'src/node-types.json'),
   // Vendored alongside the wasm from `@tree-sitter-grammars/tree-sitter-yaml` (no bare-package wasm).
   yaml: { nodeTypes: read('../vendor/tree-sitter-yaml.node-types.json'), version: '@tree-sitter-grammars/tree-sitter-yaml@0.7.1' },
+  // Vendored from the maintained `tree-sitter-grammars/tree-sitter-vue` — the same source the
+  // @codegraft/vue wasm is built from (see packages/vue/scripts/regen-wasm.sh). Types the `.vue`
+  // `<template>` zone; the wasm itself is loaded by the vue splitter, not core.
+  vue: { nodeTypes: read('../vendor/tree-sitter-vue.node-types.json'), version: 'tree-sitter-grammars/tree-sitter-vue@0.1.0' },
 }
 
 function fromPackage(pkg, sub) {

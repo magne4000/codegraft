@@ -16,6 +16,8 @@ export const COMMENT_TYPES: Record<GrammarId, ReadonlySet<string>> = {
   html: new Set(['comment']),
   css: new Set(['comment']),
   yaml: new Set(['comment']),
+  // `.vue` `<template>` zone — tree-sitter-vue names HTML comments `comment` too.
+  vue: new Set(['comment']),
 }
 
 /**

@@ -598,9 +598,12 @@ export function createCodemodTransformer<
 
   async function build(): Promise<Transformer<Ctx>> {
     await Parser.init()
+    // A ZoneSplitter registers its own grammar(s) first: its shell grammar may also be the grammar
+    // of one of its zones (Vue's `<template>` is parsed by the vue grammar `init()` loads), so it
+    // must be present before the `grammars` preload — whose entry for it is then a no-op.
+    if (typeof target !== 'string') await target.init()
     const grammars = typeof target === 'string' ? [target] : target.grammars
     for (const grammar of grammars) await Parser.loadGrammar(grammar)
-    if (typeof target !== 'string') await target.init()
     if (namespace !== undefined) await Parser.loadGrammar('typescript')
 
     function run(source: string, context: Ctx, options: FormatOptions | undefined): EditCollector {

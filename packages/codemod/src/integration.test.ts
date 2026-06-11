@@ -86,4 +86,75 @@ describe('codemod integration — the Bati transform', () => {
     expect(off).toContain('useGuest()')
     expect(off).not.toContain('useAuth()')
   })
+
+  // Tier 1: the `<template>` is a `vue` zone (not opaque html), so a codemod can match and edit its
+  // structure — `tag_name`, `directive_attribute`, `interpolation` — typed against the generated vue
+  // node-type unions (no cast).
+  it('reaches template structure as a vue zone — renames a tag, strips a directive', async () => {
+    const edit = defineCodemod((root) => {
+      root.find('tag_name').forEach((tag) => {
+        if (tag.text === 'OldWidget') tag.replaceWith('NewWidget')
+      })
+      root.find('directive_attribute').forEach((attr) => {
+        const name = attr.find('directive_name').first()
+        if (name.size() > 0 && name.text === 'v-debug') attr.remove()
+      })
+    })
+    const t = await edit.forTarget(vueSplitter)
+    const sfc = ['<template>', '  <OldWidget v-debug>{{ label }}</OldWidget>', '</template>', ''].join('\n')
+    const out = t.transform(sfc, {})
+    expect(out).toContain('<NewWidget') // start tag_name renamed
+    expect(out).toContain('</NewWidget>') // end tag_name renamed too
+    expect(out).not.toContain('OldWidget')
+    expect(out).not.toContain('v-debug') // directive_attribute removed
+    expect(out).toContain('{{ label }}') // interpolation preserved
+  })
+
+  // Tier 1: directive-level `$$` collapse — the headline feature reaching the template via
+  // `evaluateExpression` on the directive's value text. (Inside-expression collapse is Tier 2.)
+  it('collapses a $$ `v-if` at the directive level (true → strip directive, false → drop element)', async () => {
+    const collapseVIf = defineCodemod<Ctx>({ namespace: '$$' }, (root, ctx) => {
+      root.find('directive_attribute').forEach((attr) => {
+        const name = attr.find('directive_name').first()
+        if (name.size() === 0 || name.text !== 'v-if') return
+        const expr = attr.find('attribute_value').first()
+        if (expr.size() === 0 || !expr.text.includes('$$')) return
+        if (attr.evaluateExpression(expr.text, ctx)) attr.remove()
+        else attr.closest('element').remove()
+      })
+    })
+    const t = await collapseVIf.forTarget(vueSplitter)
+    const sfc = ['<template>', `  <nav v-if="$$.BATI.has('auth')">menu</nav>`, '</template>', ''].join('\n')
+
+    const on = t.transform(sfc, bati('auth'))
+    expect(on).toContain('<nav') // element kept
+    expect(on).toContain('menu')
+    expect(on).not.toContain('v-if') // always-true directive stripped
+    expect(on).not.toContain('$$')
+
+    const off = t.transform(sfc, bati())
+    expect(off).not.toContain('<nav') // whole element dropped
+    expect(off).not.toContain('menu')
+  })
+
+  // Tier 2: template expressions are real JS zones, so the *unchanged* Bati ternary collapse reaches
+  // inside `{{ }}` and `:bind` — the headline-feature payoff with no codemod change.
+  it('collapses a $$ ternary inside an interpolation and a binding (template expression zones)', async () => {
+    const t = await batiCodemod.forTarget(vueSplitter)
+    const sfc = [
+      '<template>',
+      `  <h1>{{ $$.BATI.has('auth') ? 'Dash' : 'Home' }}</h1>`,
+      `  <button :disabled="$$.BATI.has('auth') ? busy : true">go</button>`,
+      '</template>',
+    ].join('\n')
+
+    const on = t.transform(sfc, bati('auth'))
+    expect(on).toContain(`{{ 'Dash' }}`)
+    expect(on).toContain('<button :disabled="busy">')
+    expect(on).not.toContain('$$')
+
+    const off = t.transform(sfc, bati())
+    expect(off).toContain(`{{ 'Home' }}`)
+    expect(off).toContain('<button :disabled="true">')
+  })
 })
