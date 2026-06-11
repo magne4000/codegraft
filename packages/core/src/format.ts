@@ -1,6 +1,6 @@
 // Guessing a file's formatting and re-indenting inserted code. Codegraft edits byte ranges, so
 // code it doesn't touch keeps its formatting for free; these let an *inserted* snippet adopt the
-// file's indent unit and line ending instead of landing at column 0. Opt-in (the `format` option).
+// file's indent unit and line ending instead of landing at column 0.
 
 /** A source file's resolved formatting: the indent unit (`'\t'` or N spaces) and line ending. */
 export interface FormatStyle {

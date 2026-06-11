@@ -1,7 +1,7 @@
 import type { Node } from 'web-tree-sitter'
 import type { GrammarId, Point, RichNode } from './types.js'
 import type { NodeTypeAll, FieldName } from './generated/node-types.js'
-import { COMMENT_TYPES } from './comment-attachment.js'
+import { isComment } from './comment-attachment.js'
 import { assert } from './assert.js'
 
 /**
@@ -58,6 +58,11 @@ class RichNodeImpl implements RichNode {
   get parent(): RichNode | null {
     return this.#parent
   }
+  get root(): RichNode {
+    let cur: RichNode = this
+    while (cur.parent) cur = cur.parent
+    return cur
+  }
   get documentStartIndex(): number {
     return this.#node.startIndex + this.#startOffset
   }
@@ -73,21 +78,13 @@ class RichNodeImpl implements RichNode {
   /** Named structural children with comments removed — the surface pattern matching
    *  walks, so neither punctuation nor comments can perturb a match. */
   get children(): RichNode[] {
-    const comments = COMMENT_TYPES[this.language]
-    this.#children ??= this.#computeAllChildren().filter((n) => n.isNamed && !comments.has(n.type))
+    this.#children ??= this.#computeAllChildren().filter((n) => n.isNamed && !isComment(n))
     return this.#children
   }
 
   child(field: FieldName): RichNode | null {
     const target = this.#node.childForFieldName(field)
     return target === null ? null : this.#wrapperFor(target, field)
-  }
-
-  childrenForField(field: FieldName): RichNode[] {
-    return this.#node
-      .childrenForFieldName(field)
-      .filter((n): n is Node => n !== null)
-      .map((target) => this.#wrapperFor(target, field))
   }
 
   #computeAllChildren(): RichNodeImpl[] {

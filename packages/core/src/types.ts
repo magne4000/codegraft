@@ -54,13 +54,14 @@ export interface RichNode {
   readonly startPosition: Point
   readonly endPosition: Point
   readonly parent: RichNode | null
+  /** The zone tree's root — the topmost ancestor, or `this` when parentless. */
+  readonly root: RichNode
   /** Named structural children: no punctuation, no comments. The surface pattern
    *  matching walks, so comments never perturb a match. */
   readonly children: RichNode[]
   /** Full CST: every child, including punctuation and comment nodes. */
   readonly allChildren: RichNode[]
   child(field: FieldName): RichNode | null
-  childrenForField(field: FieldName): RichNode[]
   readonly leadingComments: RichNode[]
   readonly trailingComments: RichNode[]
   readonly innerComments: RichNode[]

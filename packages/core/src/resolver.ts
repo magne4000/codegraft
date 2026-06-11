@@ -169,15 +169,12 @@ class ScopeResolver implements Resolver {
       case 'import_statement':
         this.#bindImports(node)
         return
-      case 'statement_block': {
-        this.#walkChildren(node, this.#newScope(node, scope), fnScope)
-        return
-      }
+      // A block / loop opens a fresh lexical scope but binds no name of its own.
+      case 'statement_block':
       case 'for_statement':
-      case 'for_in_statement': {
+      case 'for_in_statement':
         this.#walkChildren(node, this.#newScope(node, scope), fnScope)
         return
-      }
       case 'catch_clause': {
         const inner = this.#newScope(node, scope)
         this.#bindPattern(node.child('parameter'), inner)

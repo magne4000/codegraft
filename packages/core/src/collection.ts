@@ -9,7 +9,7 @@ import type {
 import type { FieldName, NodeTypeOf, NodeTypeAllOf, FieldNameOf } from './generated/node-types.js'
 import { Parser } from './parser.js'
 import { splitAndParse } from './zone-splitter.js'
-import { attachComments, COMMENT_TYPES } from './comment-attachment.js'
+import { attachComments, isComment } from './comment-attachment.js'
 import { EditCollector } from './edit-collector.js'
 import { evaluate as evaluateNode } from './evaluate.js'
 import { createResolver, type Resolver } from './resolver.js'
@@ -86,7 +86,7 @@ export class Collection<G extends GrammarId = GrammarId> {
     const out: RichNode[] = []
     const walk = (node: RichNode): void => {
       for (const child of node.allChildren) {
-        if (COMMENT_TYPES[child.language].has(child.type) && (!pattern || pattern.test(child.text))) out.push(child)
+        if (isComment(child) && (!pattern || pattern.test(child.text))) out.push(child)
         walk(child)
       }
     }
@@ -263,14 +263,11 @@ export class Collection<G extends GrammarId = GrammarId> {
   }
 
   /**
-   * Remove each selected node.
+   * Remove each selected node. A node that owns its line(s) collapses them (no leftover blank); an
+   * inline element leaves its siblings intact around the hole.
    * - `separator`: also drop the trailing `,` of a list element, leaving no array hole / dangling comma.
-   * - `wholeLines`: remove the whole lines the node spans (a full-line comment, a YAML entry), so no
-   *   blank line is left; `collapseBlankBefore` additionally absorbs a blank-line separator directly above.
-   *
-   * Under `format`, a node that owns its line(s) collapses that line automatically (no leftover blank),
-   * while an inline element is left untouched around the hole — so `wholeLines` is only needed to force
-   * whole-line removal where the codemod can't opt in per node (and for `collapseBlankBefore`).
+   * - `wholeLines`: force whole-line removal where per-node collapse can't reach (a full-line comment,
+   *   a YAML entry); `collapseBlankBefore` additionally absorbs a blank-line separator directly above.
    */
   remove(options?: { separator?: boolean; wholeLines?: boolean; collapseBlankBefore?: boolean }): this {
     const removing = new Set(this.#nodes)
@@ -350,10 +347,10 @@ export class Collection<G extends GrammarId = GrammarId> {
   }
 
   /** Append `text` as the last element of each container: a fresh indented line in a block/class
-   *  body (re-indented under `format`), or after the last element of an array/object/argument list
-   *  (comma-separated) or interface/object-type body (`;`-separated). Under `format` a multi-line
-   *  container keeps its layout — the element lands on its own line at the elements' indent, with a
-   *  trailing separator matching the container's style — while an inline one stays on one line. */
+   *  body, or after the last element of an array/object/argument list (comma-separated) or
+   *  interface/object-type body (`;`-separated). A multi-line container keeps its layout — the element
+   *  lands on its own line at the elements' indent, with a trailing separator matching the container's
+   *  style — while an inline one stays on one line. */
   append(text: string): this {
     for (const node of this.#nodes) this.#session.formatter.append(node, text)
     return this
@@ -421,9 +418,8 @@ export class Collection<G extends GrammarId = GrammarId> {
   }
 
   /** Rewrite each node's first leading comment with `fn(its text)`; no-op where there is none.
-   *  Emptying it (`fn` returns `''`) drops the comment: under `format` its line collapses (no blank
-   *  left behind, like `remove`/`dropDirective`), keeping any sibling comments and the node; off, the
-   *  verbatim overwrite leaves the residual line for the downstream formatter. */
+   *  Emptying it (`fn` returns `''`) drops the comment and collapses its line (no blank left behind,
+   *  like `remove`/`dropDirective`), keeping any sibling comments and the node. */
   mapLeadingComment(fn: (text: string) => string): this {
     for (const node of this.#nodes) {
       const comment = node.leadingComments[0]
@@ -593,13 +589,6 @@ function dedupe(nodes: RichNode[]): RichNode[] {
   return [...new Set(nodes)]
 }
 
-/** The tree root a node belongs to (its zone's parsed root), for per-zone resolver caching. */
-function rootOf(node: RichNode): RichNode {
-  let cur = node
-  while (cur.parent) cur = cur.parent
-  return cur
-}
-
 /**
  * Build a lazy transformer that runs an imperative `codemod(root, context)` against a target
  * (a grammar or a {@link ZoneSplitter}): `init()` loads grammars once; the returned transformer
@@ -645,7 +634,7 @@ export function createCodemodTransformer<
         collector,
         formatter,
         resolver(node) {
-          const treeRoot = rootOf(node)
+          const treeRoot = node.root
           if (!resolvers.has(treeRoot)) resolvers.set(treeRoot, createResolver(treeRoot))
           return resolvers.get(treeRoot) ?? null
         },

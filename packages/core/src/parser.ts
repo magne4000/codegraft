@@ -68,13 +68,6 @@ async function loadLanguage(id: string, wasmPath?: string): Promise<Language> {
   return Language.load(readFileSync(path))
 }
 
-/** The npm package a consumer must install for a built-in grammar, or `null` for a vendored
- *  grammar that ships with `@codegraft/core`. */
-export function grammarPackage(id: GrammarId): string | null {
-  const spec = PEER_WASM[id]
-  return spec ? spec.slice(0, spec.indexOf('/')) : null
-}
-
 function resolveBuiltinWasm(id: string): string {
   const vendored = VENDORED_WASM[id as GrammarId]
   if (vendored) return fileURLToPath(new URL(`../wasm/${vendored}`, import.meta.url))

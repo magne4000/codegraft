@@ -1,5 +1,5 @@
 import type { RichNode } from './types.js'
-import { COMMENT_TYPES } from './comment-attachment.js'
+import { isComment } from './comment-attachment.js'
 import { assert } from './assert.js'
 
 // Structural queries over container nodes (arrays / objects / blocks / interface bodies …), shared by
@@ -23,7 +23,7 @@ export function trailingSeparator(node: RichNode, sep = ','): RichNode | null {
   if (i === -1) return null
   for (let j = i + 1; j < siblings.length; j++) {
     const sib = siblings[j]
-    if (COMMENT_TYPES[sib.language].has(sib.type)) continue
+    if (isComment(sib)) continue
     return sib.type === sep ? sib : null
   }
   return null
