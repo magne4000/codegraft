@@ -5,9 +5,15 @@ zones so a Codegraft codemod applies per section:
 
 | Section | Grammar |
 |---|---|
-| `<template>` | `html` |
+| `<template>` | `vue` |
 | `<script>` / `<script setup>` | `typescript` / `tsx` / `javascript` (by `lang`) |
 | `<style>` | `css` |
+
+The `<template>` is parsed with the **vue** grammar (not `html`), so a codemod matches its structure
+directly — `interpolation`, `directive_attribute` (`directive_name` / `directive_value` /
+`attribute_value`), component `tag_name`. The grammar's node types are generated into Codegraft's
+typed unions, so `find('directive_attribute')` autocompletes and type-checks like any other. (Embedded
+template *expressions* are still opaque text inside those nodes — parsing them as JS is a later tier.)
 
 ```ts
 import { vueSplitter } from '@codegraft/vue'

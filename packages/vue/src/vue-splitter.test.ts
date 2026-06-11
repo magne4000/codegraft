@@ -19,9 +19,10 @@ beforeAll(async () => {
 })
 
 describe('vueSplitter', () => {
-  it('splits an SFC into html / typescript / css zones', () => {
+  it('splits an SFC into vue / typescript / css zones', () => {
     const zones = vueSplitter.split(SFC)
-    expect(zones.map((z) => z.language)).toEqual(['html', 'typescript', 'css'])
+    expect(zones.map((z) => z.language)).toEqual(['vue', 'typescript', 'css'])
+    expect(zones[0].source.trim()).toBe('<div>{{ x }}</div>')
     expect(zones[1].source.trim()).toBe('const x = 1')
     expect(zones[2].source.trim()).toBe('a { color: red }')
   })
@@ -41,11 +42,11 @@ describe('vueSplitter', () => {
   it('is driven by the CST, not a regex — script-like template text is not a zone', () => {
     const sfc = '<template><pre>&lt;/script&gt; sample</pre></template>\n<script lang="ts">const y = 2</script>'
     const zones = vueSplitter.split(sfc)
-    expect(zones.map((z) => z.language)).toEqual(['html', 'typescript'])
+    expect(zones.map((z) => z.language)).toEqual(['vue', 'typescript'])
     expect(zones[1].source).toBe('const y = 2')
   })
 
   it('skips empty/absent sections', () => {
-    expect(vueSplitter.split('<template><div/></template>').map((z) => z.language)).toEqual(['html'])
+    expect(vueSplitter.split('<template><div/></template>').map((z) => z.language)).toEqual(['vue'])
   })
 })
