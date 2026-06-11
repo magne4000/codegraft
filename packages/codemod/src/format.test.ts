@@ -76,6 +76,74 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('const a = [1, 2]', {})).toBe('const a = [1, 2, 3]')
   })
 
+  it('appends to a multi-line object on its own line, keeping the trailing-comma style', async () => {
+    // The object is laid out one-key-per-line with trailing commas — the new key joins that layout
+    // (its own line, indented, trailing comma) instead of being glued inline after the last key.
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('call_expression', { function: 'defineConfig' }).first().field('arguments').children().first().append('resolve: { alias: {} }')
+    }).forTarget('tsx')
+    expect(t.transform('export default defineConfig({\n  plugins: [vike()],\n  build: { sourcemap: false },\n});', {})).toBe(
+      'export default defineConfig({\n  plugins: [vike()],\n  build: { sourcemap: false },\n  resolve: { alias: {} },\n});',
+    )
+  })
+
+  it('appends to a multi-line array without a trailing comma, adding only the separating comma', async () => {
+    // No trailing comma in the source → the new element gets none either; just the comma that
+    // separates it from the previous one. (Host trailing-comma style preserved.)
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('array').first().append('3')
+    }).forTarget('tsx')
+    expect(t.transform('const a = [\n  1,\n  2\n];', {})).toBe('const a = [\n  1,\n  2,\n  3\n];')
+  })
+
+  it('appends an interface member with a `;` separator, not a comma, keeping the layout', async () => {
+    // Interface/type members are `;`-separated, never comma-joined. A multi-line body that already
+    // terminates members with `;` gets the new member on its own line, likewise `;`-terminated.
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('interface_body').first().append('b: B')
+    }).forTarget('tsx')
+    expect(t.transform('interface C {\n  a: A;\n}', {})).toBe('interface C {\n  a: A;\n  b: B;\n}')
+  })
+
+  it('appends an interface member to a `;`-less multi-line body, relying on the newline (no `;` added)', async () => {
+    // The body separates members by newline alone — the `;` is optional, so the new member matches
+    // (own line, no terminator) rather than introducing a `;` the host doesn't use. The real `.d.ts`
+    // merge shape (Vike.PageContext member union).
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('interface_body').first().append('session?: Session')
+    }).forTarget('tsx')
+    expect(t.transform('interface PageContext {\n  user?: User\n}', {})).toBe(
+      'interface PageContext {\n  user?: User\n  session?: Session\n}',
+    )
+  })
+
+  it('folds several interface members in one pass, each on its own `;`-terminated line', async () => {
+    // Multiple appends to the same body compose (each lands after the previous), the way mergeDts
+    // unions a duplicate interface's members into the canonical one.
+    const t = await defineCodemod({ format: true }, (root) => {
+      const body = root.find('interface_body').first()
+      body.append('b: B')
+      body.append('c: C')
+    }).forTarget('tsx')
+    expect(t.transform('interface C {\n  a: A;\n}', {})).toBe('interface C {\n  a: A;\n  b: B;\n  c: C;\n}')
+  })
+
+  it('appends an `object_type` member with a `;` separator', async () => {
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('object_type').first().append('c: C')
+    }).forTarget('tsx')
+    expect(t.transform('type T = {\n  a: A;\n  b: B;\n};', {})).toBe('type T = {\n  a: A;\n  b: B;\n  c: C;\n};')
+  })
+
+  it('keeps an inline interface body on one line, `;`-separated (not comma-joined)', async () => {
+    // An inline body stays inline — the fix is the separator (`;`, not `,`); reflowing an existing
+    // inline body to multi-line is beyond an additive append.
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('interface_body').first().append('b: B')
+    }).forTarget('tsx')
+    expect(t.transform('interface C { a: A; }', {})).toBe('interface C { a: A; b: B; }')
+  })
+
   it('collapses the line of an own-line element removed under format', async () => {
     const t = await defineCodemod({ format: true }, (root) => {
       root.find('array').first().children().at(1).remove({ separator: true })

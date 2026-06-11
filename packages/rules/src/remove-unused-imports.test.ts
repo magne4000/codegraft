@@ -47,6 +47,17 @@ describe('removeUnusedImports — partial specifier removal', () => {
     expect(t.transform("import { a, b as c } from 'm'\nuse(c)", {})).toBe("import { b as c } from 'm'\nuse(c)")
   })
 
+  it('keeps the trailing semicolon when it rewrites a pruned import', async () => {
+    // The `;` is part of the import_statement node; rewriting the statement must carry it back.
+    const t = await on('tsx')
+    expect(t.transform('import { a, b } from "x";\nexport const z = a;', {})).toBe('import { a } from "x";\nexport const z = a;')
+  })
+
+  it('does not invent a semicolon when the original omits one (ASI)', async () => {
+    const t = await on('tsx')
+    expect(t.transform('import { a, b } from "x"\nexport const z = a', {})).toBe('import { a } from "x"\nexport const z = a')
+  })
+
   it('removes an unused alias, keying off the local name', async () => {
     const t = await on('tsx')
     expect(t.transform("import { a as b, keep } from 'm'\nuse(keep)", {})).toBe("import { keep } from 'm'\nuse(keep)")

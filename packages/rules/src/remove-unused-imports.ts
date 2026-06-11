@@ -121,7 +121,12 @@ export const removeUnusedImports = defineCodemod((root) => {
       else specifiers.push(asType(binding) && !asTypeStatement ? `type ${binding.text}` : binding.text)
     }
     if (specifiers.length) leading.push(`{ ${specifiers.join(', ')} }`)
-    stmt.replaceWith(`${asTypeStatement ? 'import type' : 'import'} ${leading.join(', ')} from ${stmt.field('source').text}`)
+    // The `;` is part of the import_statement node, so the rewrite must carry it back — preserve the
+    // original's terminator (present, or omitted under ASI) rather than dropping it.
+    const semi = stmt.node.text.endsWith(';') ? ';' : ''
+    stmt.replaceWith(
+      `${asTypeStatement ? 'import type' : 'import'} ${leading.join(', ')} from ${stmt.field('source').text}${semi}`,
+    )
   })
 })
 

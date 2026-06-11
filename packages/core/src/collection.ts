@@ -340,8 +340,10 @@ export class Collection<G extends GrammarId = GrammarId> {
   }
 
   /** Append `text` as the last element of each container: a fresh indented line in a block/class
-   *  body (re-indented under `format`), or after the last element with a comma in an
-   *  array/object/argument list. */
+   *  body (re-indented under `format`), or after the last element of an array/object/argument list
+   *  (comma-separated) or interface/object-type body (`;`-separated). Under `format` a multi-line
+   *  container keeps its layout — the element lands on its own line at the elements' indent, with a
+   *  trailing separator matching the container's style — while an inline one stays on one line. */
   append(text: string): this {
     for (const node of this.#nodes) {
       const elements = node.children
@@ -354,7 +356,7 @@ export class Collection<G extends GrammarId = GrammarId> {
       } else if (elements.length === 0) {
         this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text)
       } else {
-        this.#session.collector.insertRight(elements[elements.length - 1].documentEndIndex, ', ' + text)
+        this.#appendElement(node, elements[elements.length - 1], text)
       }
     }
     return this
@@ -501,6 +503,31 @@ export class Collection<G extends GrammarId = GrammarId> {
     const indent = this.#session.collector.indentAt(index)
     return style.eol + indent + reindent(text, indent, style.eol)
   }
+  /** Append `text` after the last element `last` of a delimited container — comma-separated
+   *  (array/object/arguments) or `;`-separated (interface/object-type body) — preserving the
+   *  container's layout under `format` (see the branches). The verbatim arm stays byte-identical. */
+  #appendElement(node: RichNode, last: RichNode, text: string): void {
+    const collector = this.#session.collector
+    if (!this.#session.style) {
+      // Verbatim: the historical inline comma join, kept byte-identical (whitespace is Prettier's job).
+      collector.insertRight(last.documentEndIndex, ', ' + text)
+      return
+    }
+    const sep = SEMI_CONTAINERS.has(node.type) ? ';' : ','
+    if (node.startPosition.row === node.endPosition.row) {
+      // Inline container: keep it on one line, separated (and, for `;`, terminated) by `sep`.
+      collector.insertRight(last.documentEndIndex, `${sep} ${text}`)
+      return
+    }
+    // Multi-line: a fresh line at the elements' indent, mirroring the container's trailing-separator
+    // style — extend an existing trailing `sep`, add the mandatory `,` a comma list omits, or rely on
+    // the newline alone for a `;` list (where the separator between members is optional).
+    const trailing = trailingSeparator(last, sep)
+    const line = this.#line(text, last.documentStartIndex)
+    if (trailing) collector.insertRight(trailing.documentEndIndex, line + sep)
+    else if (sep === ';') collector.insertRight(last.documentEndIndex, line)
+    else collector.insertRight(last.documentEndIndex, sep + line)
+  }
   /** Open an empty `{}` block onto its own indented line — `{}` → `{⏎  text⏎}` — or insert `text`
    *  bare when not formatting. */
   #fillBlock(node: RichNode, text: string): void {
@@ -546,9 +573,10 @@ function snippet(value: unknown): string {
   return value instanceof Collection ? value.text : String(value)
 }
 
-/** The `,` token immediately after `node` among its parent's children (comments skipped), or
- *  `null` — the separator `remove({ separator: true })` drops alongside a list element. */
-function trailingSeparator(node: RichNode): RichNode | null {
+/** The separator token (a `,` by default, or `;` for a `;`-list) immediately after `node` among its
+ *  parent's children (comments skipped), or `null` — the trailing separator `remove({ separator })`
+ *  drops alongside a list element, and `append` extends to keep the container's style. */
+function trailingSeparator(node: RichNode, sep = ','): RichNode | null {
   const siblings = node.parent?.allChildren
   if (!siblings) return null
   const i = siblings.indexOf(node)
@@ -556,7 +584,7 @@ function trailingSeparator(node: RichNode): RichNode | null {
   for (let j = i + 1; j < siblings.length; j++) {
     const sib = siblings[j]
     if (COMMENT_TYPES[sib.language].has(sib.type)) continue
-    return sib.type === ',' ? sib : null
+    return sib.type === sep ? sib : null
   }
   return null
 }
@@ -570,6 +598,9 @@ function openDelimiter(node: RichNode): RichNode {
 
 // Containers whose elements are separated by newlines (a block / class body), not commas.
 const NEWLINE_CONTAINERS = new Set(['statement_block', 'class_body', 'program'])
+
+// Containers whose members are separated/terminated by `;` (a TS interface / object type), not commas.
+const SEMI_CONTAINERS = new Set(['interface_body', 'object_type'])
 
 /** The module specifier of an import statement's source text, for idempotent `ensureImport`. */
 function importSource(statementText: string): string | null {
