@@ -1,11 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-// web-tree-sitter is vendored, not a runtime dependency: the bare npm package ships ~4.6 MB (debug
-// build, source maps, CJS), of which we load only the release ESM glue + engine wasm. The glue finds
-// its wasm sibling via `import.meta.url`, so importing the vendored file is enough — no peer, no
-// `locateFile`. See scripts/regen-web-tree-sitter.sh.
-import { Language, Parser as TreeSitter } from '../vendor/web-tree-sitter/web-tree-sitter.js'
-import type { Tree } from '../vendor/web-tree-sitter/web-tree-sitter.js'
+// web-tree-sitter is vendored (scripts/regen-web-tree-sitter.mjs), not a runtime dependency. The glue
+// self-locates its wasm sibling via `import.meta.url`, so importing the vendored file is all it needs
+// — no peer, no `locateFile`.
+import { Language, Parser as TreeSitter, type Tree } from '../vendor/web-tree-sitter/web-tree-sitter.js'
 import type { GrammarId } from './types.js'
 import { assert } from './assert.js'
 
@@ -19,7 +17,7 @@ import { assert } from './assert.js'
  * - `tsx` — rebuilt from `tree-sitter-typescript`'s grammar source, because its npm wasm is ABI-14
  *   and loads without the supertype metadata `find('expression')` needs; see `scripts/regen-ts-wasm.sh`.
  * - `html`/`css` — copied verbatim from their npm packages (already ABI-current with supertypes);
- *   see `scripts/regen-builtin-wasm.sh`.
+ *   see `scripts/regen-builtin-wasm.mjs`.
  * - `yaml` — vendored from `@tree-sitter-grammars/tree-sitter-yaml` (the bare package ships no wasm).
  */
 const VENDORED_WASM: Partial<Record<GrammarId, string>> = {

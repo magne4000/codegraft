@@ -34,7 +34,7 @@ const lines = stripSourcemap(readFileSync(dts, 'utf8')).split('\n')
 if (/^declare module 'web-tree-sitter' \{/.test(lines[0])) {
   lines.shift()
   while (lines.length && lines.at(-1).trim() === '') lines.pop()
-  if (lines.at(-1)?.trim() === '}') lines.pop()
+  if (lines.length && lines.at(-1).trim() === '}') lines.pop()
   for (let i = 0; i < lines.length; i++) if (lines[i].startsWith('\t')) lines[i] = lines[i].slice(1)
 }
 writeFileSync(dts, lines.join('\n') + '\n')
