@@ -23,12 +23,16 @@ describe('Parser', () => {
     expect(tree.rootNode.hasError).toBe(false)
   })
 
-  it('loads tree-sitter-typescript once for both typescript and tsx', async () => {
-    await Parser.loadGrammar('typescript')
-    await Parser.loadGrammar('tsx')
-    // Distinct grammars from one package: tsx parses JSX that typescript rejects.
-    expect(Parser.parse('const x = <div/>', 'tsx').rootNode.hasError).toBe(false)
-    expect(Parser.parse('const x = <div/>', 'typescript').rootNode.hasError).toBe(true)
+  it('folds the JS/TS/TSX family onto the tsx grammar at runtime', async () => {
+    const family = ['javascript', 'typescript', 'tsx'] as const
+    for (const id of family) await Parser.loadGrammar(id)
+    // Every id routes to the one tsx superset, so JSX *and* TS syntax parse under all three.
+    for (const id of family) {
+      expect(Parser.parse('const x = <div/>', id).rootNode.hasError).toBe(false) // JSX
+      expect(Parser.parse('const x = y as Foo', id).rootNode.hasError).toBe(false) // TS cast
+    }
+    // The lone construct the tsx grammar can't read: the JSX-ambiguous angle-bracket cast (use `as`).
+    expect(Parser.parse('const x = <Foo>y', 'typescript').rootNode.hasError).toBe(true)
   })
 
   it('does not preload grammars — parsing an unloaded grammar asserts', () => {

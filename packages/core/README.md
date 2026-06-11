@@ -9,5 +9,6 @@ with source maps). Compiled Codegraft codemods depend only on this package.
 import { Collection, createCodemodTransformer, evaluate } from '@codegraft/core'
 ```
 
-Grammars (`tree-sitter-javascript|typescript|html|css`) are **optional peer
-dependencies** — install only the ones your targets use.
+JavaScript, TypeScript, and TSX all parse with a vendored grammar bundled here (no peer
+dependency); `tree-sitter-html` and `tree-sitter-css` are **optional peer dependencies** —
+install them only if your targets include `.html` / `.css`.

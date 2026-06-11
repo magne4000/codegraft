@@ -227,4 +227,4 @@ pnpm test      # vitest
 
 Requires Node ≥ 22.13 and pnpm 11.
 
-The node-type/field unions in `@codegraft/core/src/generated/node-types.ts` are checked in and regenerated with `pnpm --filter @codegraft/core regen-node-types` (CI fails if a regen is owed). It reads javascript/html/css from their npm packages, typescript/tsx from the vendored `node-types.json` that `regen-ts-wasm` writes alongside the wasm, and yaml from the vendored copy alongside the `tree-sitter-yaml` wasm (from `@tree-sitter-grammars/tree-sitter-yaml`).
+The node-type/field unions in `@codegraft/core/src/generated/node-types.ts` are checked in and regenerated with `pnpm --filter @codegraft/core regen-node-types` (CI fails if a regen is owed). It reads javascript/html/css from their npm packages, typescript/tsx from the vendored `node-types.json` that `regen-ts-wasm` writes (it builds only the tsx wasm — the runtime grammar for the whole JS/TS/TSX family — but vendors both node-types so the per-grammar typings stay distinct), and yaml from the vendored copy alongside the `tree-sitter-yaml` wasm (from `@tree-sitter-grammars/tree-sitter-yaml`).
