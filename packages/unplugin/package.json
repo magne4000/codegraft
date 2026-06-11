@@ -1,6 +1,6 @@
 {
   "name": "@codegraft/unplugin",
-  "version": "0.1.0-beta.10",
+  "version": "0.1.0-beta.11",
   "description": "Apply Codegraft transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm.",
   "license": "MIT",
   "type": "module",

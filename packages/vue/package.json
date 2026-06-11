@@ -1,6 +1,6 @@
 {
   "name": "@codegraft/vue",
-  "version": "0.1.0-beta.10",
+  "version": "0.1.0-beta.11",
   "description": "Vue SFC support for Codegraft: vueSplitter splits a .vue file into <template>/<script>/<style> zones.",
   "license": "MIT",
   "type": "module",
