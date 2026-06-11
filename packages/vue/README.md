@@ -7,7 +7,7 @@ zones so a Codegraft codemod applies per section:
 |---|---|
 | `<template>` | `vue` (+ one `typescript` zone per embedded expression) |
 | `<script>` / `<script setup>` | `typescript` / `tsx` / `javascript` (by `lang`) |
-| `<style>` | `css` |
+| `<style>` | `css` (+ one `typescript` zone per `v-bind()` argument) |
 
 The `<template>` is parsed with the **vue** grammar (not `html`), so a codemod matches its structure
 directly — `interpolation`, `directive_attribute` (`directive_name` / `directive_value` /
@@ -22,6 +22,10 @@ template-local) and `v-slot` patterns are skipped (locals, not references). Thes
 structural `vue` zone — structure edits land on the vue nodes, expression edits on the `typescript`
 ones; a value that is a bare object literal (`:class="{ a: x }"`) parses in statement position as a
 block, so identifiers inside it still surface but structural edits targeting the object won't match.
+
+A `<style>` likewise yields a `typescript` zone per `v-bind()` argument (`color: v-bind(themeColor)`),
+covering both the bare and quoted (`v-bind('a + "b"')`) forms — so a binding referenced only from CSS
+is seen as used too.
 
 ```ts
 import { vueSplitter } from '@codegraft/vue'

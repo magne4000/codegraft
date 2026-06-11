@@ -33,7 +33,7 @@ transform.transform("import { Foo } from 'm'\nlet v: Foo", {})
 // → "import type { Foo } from 'm'\nlet v: Foo"
 ```
 
-It works on every JS-family grammar (JS / JSX / TS / TSX) and, through a `ZoneSplitter`, a Vue SFC — pruning the `<script>` while keeping a binding used only from a sibling zone: a component `<Tag>`, a custom `v-directive`, an interpolation/binding expression, or a second `<script>`. (A `<style> v-bind()` reference is not yet covered.)
+It works on every JS-family grammar (JS / JSX / TS / TSX) and, through a `ZoneSplitter`, a Vue SFC — pruning the `<script>` while keeping a binding used only from a sibling zone: a component `<Tag>`, a custom `v-directive`, an interpolation/binding expression, a `<style> v-bind()`, or a second `<script>`.
 
 The rule module is also a ready codemod (default export + `targets: ['javascript', 'typescript', 'tsx']`), so the CLI runs it directly — `.vue` `<script>` included, via the cli's built-in splitter:
 

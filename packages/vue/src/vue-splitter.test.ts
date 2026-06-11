@@ -91,3 +91,30 @@ describe('vueSplitter — template expression zones (Tier 2)', () => {
     }
   })
 })
+
+describe('vueSplitter — style v-bind() expression zones', () => {
+  const styleExprs = (style: string): string[] =>
+    vueSplitter
+      .split(`<style>${style}</style>`)
+      .filter((z) => z.language === 'typescript')
+      .map((z) => z.source)
+
+  it('extracts bare and member-access v-bind() arguments', () => {
+    expect(styleExprs('.a{color:v-bind(themeColor);width:v-bind(theme.size)}')).toEqual(['themeColor', 'theme.size'])
+  })
+
+  it('extracts a quoted v-bind() expression with the quotes stripped', () => {
+    expect(styleExprs(`.a{margin:v-bind('gap + "px"')}`)).toEqual(['gap + "px"'])
+  })
+
+  it('skips the css parse entirely when there is no v-bind', () => {
+    expect(styleExprs('.a{color:red}')).toEqual([])
+  })
+
+  it('gives each v-bind zone the exact document slice at its startOffset', () => {
+    const sfc = `<template><div/></template>\n<style>.a{color:v-bind(c)}</style>`
+    for (const zone of vueSplitter.split(sfc)) {
+      expect(zone.source).toBe(sfc.slice(zone.startOffset, zone.startOffset + zone.source.length))
+    }
+  })
+})

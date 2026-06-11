@@ -18,9 +18,10 @@ type RawZone = { language: GrammarId; source: string; startOffset: number }
  * its content.
  *
  * The template additionally yields one `typescript` zone per embedded expression —
- * interpolation bodies, directive values, dynamic directive arguments — so a codemod sees
- * real JS nodes inside it (see {@link templateExpressionZones}). These overlap the
- * structural `vue` zone: structure edits land on vue nodes, expression edits on these.
+ * interpolation bodies, directive values, dynamic directive arguments — and `<style>` one per
+ * `v-bind()` argument, so a codemod sees real JS nodes inside both (see
+ * {@link templateExpressionZones} / {@link styleBindZones}). These overlap the structural `vue` /
+ * `css` zone: structure edits land on those nodes, expression edits on the `typescript` ones.
  */
 export const vueSplitter: ZoneSplitter = {
   id: 'vue',
@@ -30,6 +31,8 @@ export const vueSplitter: ZoneSplitter = {
 
   async init(): Promise<void> {
     await Parser.loadGrammar(VUE_GRAMMAR, VUE_WASM)
+    // `split()` also parses `<style>` content with the css grammar to extract `v-bind()` expressions.
+    await Parser.loadGrammar('css')
   },
 
   split(source: string): RawZone[] {
@@ -39,6 +42,7 @@ export const vueSplitter: ZoneSplitter = {
       const zone = sectionZone(section, source)
       if (zone) zones.push(zone)
       if (section.type === 'template_element') zones.push(...templateExpressionZones(section, source))
+      else if (section.type === 'style_element') zones.push(...styleBindZones(section))
     }
     return zones
   },
@@ -156,6 +160,29 @@ function firstDescendant(node: Node, type: string): Node | null {
     if (nested) return nested
   }
   return null
+}
+
+/**
+ * Vue's `<style>` can reference a script binding through the special `v-bind()` css function
+ * (`color: v-bind(themeColor)`). Parse the style with the css grammar and emit each `v-bind()`
+ * argument — a bare `plain_value` (`themeColor`, `theme.color`) or a quoted `string_content` (a JS
+ * expression) — as a `typescript` zone, so it reads as a real reference like a template expression.
+ * Gated on a cheap substring so a style without `v-bind` skips the parse entirely.
+ */
+function styleBindZones(section: Node): RawZone[] {
+  const body = childByType(section, 'raw_text')
+  if (!body || !body.text.includes('v-bind(')) return []
+  const zones: RawZone[] = []
+  const visit = (node: Node): void => {
+    if (node.type === 'call_expression' && childByType(node, 'function_name')?.text === 'v-bind') {
+      const arg = firstDescendant(node, 'plain_value') ?? firstDescendant(node, 'string_content')
+      if (arg) pushExpr(zones, arg.text, body.startIndex + arg.startIndex) // body offset is document-absolute
+      return
+    }
+    for (const child of namedChildren(node)) visit(child)
+  }
+  visit(Parser.parse(body.text, 'css').rootNode)
+  return zones
 }
 
 function scriptLanguage(startTag: string): GrammarId {

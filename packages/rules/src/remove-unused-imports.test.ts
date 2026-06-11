@@ -317,4 +317,17 @@ describe('removeUnusedImports — Vue SFC cross-zone use (kept, not pruned)', ()
     // `<div>` is a native element, not a `Div` component — the import is genuinely unused.
     expect(t.transform(sfc('<div/>', "import { Div } from './div'"), {})).not.toContain('import')
   })
+
+  it('keeps an import used only in a `<style> v-bind()`', async () => {
+    const t = await on(vueSplitter)
+    const withStyle = [
+      '<template><div/></template>',
+      '<script setup lang="ts">',
+      "import { themeColor } from './theme'",
+      '</script>',
+      '<style>.box { color: v-bind(themeColor) }</style>',
+      '',
+    ].join('\n')
+    expect(t.transform(withStyle, {})).toContain("import { themeColor } from './theme'")
+  })
 })

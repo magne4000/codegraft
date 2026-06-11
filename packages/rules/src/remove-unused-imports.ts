@@ -35,8 +35,8 @@ const isValueRef = (ref: RichNode): boolean => {
  * namespace, `declare module`) don't block pruning — a syntactic use-scan covers them; only `with`
  * and `eval`, which can reach a name invisibly, force a no-op. Runs on every JS-family grammar and,
  * through a `ZoneSplitter`, a Vue SFC: a binding used only from a sibling zone — the template's
- * expression zones, a component `<Tag>`, a custom `v-directive`, or a second `<script>` — is kept,
- * not pruned. (A `<style> v-bind()` reference is not yet covered.)
+ * expression zones, a component `<Tag>`, a custom `v-directive`, a `<style> v-bind()`, or a second
+ * `<script>` — is kept, not pruned.
  */
 export const removeUnusedImports = defineCodemod((root) => {
   // The resolver reports only value (`identifier`) references, so type-position uses are gathered
