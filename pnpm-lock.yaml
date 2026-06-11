@@ -103,9 +103,6 @@ importers:
       tree-sitter-html:
         specifier: ^0.23.0
         version: 0.23.2
-      tree-sitter-javascript:
-        specifier: ^0.25.0
-        version: 0.25.0
 
 packages:
 
