@@ -263,27 +263,18 @@ export class Collection<G extends GrammarId = GrammarId> {
   }
 
   /**
-   * Remove each selected node. A node that owns its line(s) collapses them (no leftover blank); an
-   * inline element leaves its siblings intact around the hole.
-   * - `separator`: also drop the trailing `,` of a list element, leaving no array hole / dangling comma.
-   * - `wholeLines`: force whole-line removal where per-node collapse can't reach (a full-line comment,
-   *   a YAML entry); `collapseBlankBefore` additionally absorbs a blank-line separator directly above.
+   * Remove each selected node. The byte range goes; any whitespace it owned (its indent, its line)
+   * is left for a downstream formatter to tidy. `separator` also drops the trailing `,` of a list
+   * element, so no array hole (`[1, , 3]`) or invalid dangling member is left behind.
    */
-  remove(options?: { separator?: boolean; wholeLines?: boolean; collapseBlankBefore?: boolean }): this {
-    const removing = new Set(this.#nodes)
+  remove(options?: { separator?: boolean }): this {
     for (const node of this.#nodes) {
-      if (options?.wholeLines) {
-        this.#session.formatter.removeWholeLines(node.documentStartIndex, node.documentEndIndex, options.collapseBlankBefore)
-        continue
-      }
       let end = node.documentEndIndex
       if (options?.separator) {
         const comma = trailingSeparator(node)
         if (comma) end = comma.documentEndIndex
       }
-      // Collapse the line when the node owned it, the way Prettier would have — and a blank line that
-      // would dangle against the container's edge once the rest of the removal set is gone.
-      this.#session.formatter.removeNode(node.documentStartIndex, end, blankCollapse(node, removing))
+      this.#session.collector.remove(node.documentStartIndex, end)
     }
     return this
   }
@@ -302,16 +293,8 @@ export class Collection<G extends GrammarId = GrammarId> {
       this.#session.collector.remove(wrapper.documentStartIndex, wrapper.documentEndIndex)
       return this
     }
-    const first = kept[0]
-    const last = kept[kept.length - 1]
-    this.#session.collector.remove(wrapper.documentStartIndex, first.documentStartIndex)
-    this.#session.collector.remove(last.documentEndIndex, wrapper.documentEndIndex)
-    // The kept statements drop a level: the delete above lets the first line inherit the wrapper's
-    // indent, but the continuation lines keep their deeper source indent — dedent them to match.
-    // Deferred so edits to the kept nodes in the same pass (an inner conditional collapsed away) win.
-    const formatter = this.#session.formatter
-    const dedent = formatter.indentAt(first.documentStartIndex).length - formatter.indentAt(wrapper.documentStartIndex).length
-    formatter.deferReindent(first.documentStartIndex, last.documentEndIndex, dedent)
+    this.#session.collector.remove(wrapper.documentStartIndex, kept[0].documentStartIndex)
+    this.#session.collector.remove(kept[kept.length - 1].documentEndIndex, wrapper.documentEndIndex)
     return this
   }
 
@@ -418,15 +401,15 @@ export class Collection<G extends GrammarId = GrammarId> {
   }
 
   /** Rewrite each node's first leading comment with `fn(its text)`; no-op where there is none.
-   *  Emptying it (`fn` returns `''`) drops the comment and collapses its line (no blank left behind,
-   *  like `remove`/`dropDirective`), keeping any sibling comments and the node. */
+   *  Emptying it (`fn` returns `''`) drops the comment (its byte range; the residual line is the
+   *  formatter's to tidy), keeping any sibling comments and the node. */
   mapLeadingComment(fn: (text: string) => string): this {
     for (const node of this.#nodes) {
       const comment = node.leadingComments[0]
       if (!comment) continue
       const next = fn(comment.text)
       if (next === '') {
-        this.#session.formatter.removeNode(comment.documentStartIndex, comment.documentEndIndex)
+        this.#session.collector.remove(comment.documentStartIndex, comment.documentEndIndex)
       } else {
         this.#session.collector.overwrite(comment.documentStartIndex, comment.documentEndIndex, next)
       }
@@ -444,17 +427,14 @@ export class Collection<G extends GrammarId = GrammarId> {
     return null
   }
 
-  /** Remove a matching leading directive comment (and the gap up to this node), keeping the node
-   *  itself. Compose with `remove()` to drop both. */
+  /** Remove a matching leading directive comment and the gap up to this node (any comments stacked
+   *  under the directive go with it), keeping the node itself. Composes with a following `remove()`
+   *  (the two deletes abut at the node's start). */
   dropDirective(pattern: RegExp): this {
     const node = this.#single()
     const comment = node.leadingComments.find((c) => pattern.test(c.text))
     if (!comment) return this
-    // The contract is "drop the directive and the gap up to the node" — so removal still runs to the
-    // node, taking any comments stacked under the directive with it. It collapses those whole lines
-    // but stops at the node's line, leaving the node's own line for a following `remove` to collapse
-    // independently: the two deletes abut at the node's line start and compose.
-    this.#session.formatter.removeLeadingTo(comment.documentStartIndex, node.documentStartIndex)
+    this.#session.collector.remove(comment.documentStartIndex, node.documentStartIndex)
     return this
   }
 
@@ -549,21 +529,6 @@ function siblingAt(node: RichNode, delta: number): RichNode | null {
   return i === -1 ? null : (siblings![i + delta] ?? null)
 }
 
-/** Which dangling blank lines a removed `node`'s line collapse should also absorb, given the whole
- *  set `removing`. `before` when every following sibling is removed too (the node ends up last, so a
- *  blank that preceded it would dangle before the container's close); `after` when every preceding
- *  one is (it ends up first, so a following blank would dangle after the open). */
-function blankCollapse(node: RichNode, removing: Set<RichNode>): { before: boolean; after: boolean } {
-  const siblings = node.parent?.children
-  const i = siblings?.indexOf(node) ?? -1
-  if (i === -1) return { before: false, after: false }
-  const allRemoved = (from: number, to: number): boolean => {
-    for (let j = from; j < to; j++) if (!removing.has(siblings![j])) return false
-    return true
-  }
-  return { before: allRemoved(i + 1, siblings!.length), after: allRemoved(0, i) }
-}
-
 // JS/TS scope boundaries — the structural notion behind `closestScope` (no resolver needed).
 const SCOPE_NODES = new Set([
   'program',
@@ -640,7 +605,6 @@ export function createCodemodTransformer<
         },
       }
       codemod(new Collection<G>(zones.map((zone) => zone.tree), session), context)
-      formatter.flush() // apply deferred reindents (unwrap), now that explicit edits have won overlaps
       return collector
     }
 

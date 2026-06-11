@@ -103,9 +103,9 @@ export interface SourceMap {
  * and is constrained to a record so it can flow into the body and `transform(src, ctx)`.
  */
 export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
-  /** Apply the codemod to `source`. The recorded edits are always rendered indentation-aware —
-   *  inserts re-indented to the file's unit/EOL, a removed node's line collapsed — keyed off the
-   *  source's detected style; `options` overrides that detection per apply (see {@link FormatOptions}). */
+  /** Apply the codemod to `source`. Edits are rendered just enough to stay syntactically valid —
+   *  an inserted snippet re-indented to its anchor line (EOL from the source, or `options`), an
+   *  appended element given its container's separator. Cosmetic layout is a downstream formatter's job. */
   transform(source: string, context: Ctx, options?: FormatOptions): string
   /** Like {@link transform} but also returns a source map (`options.source` names the input in the
    *  map). Used by build-pipeline integrations such as `@codegraft/unplugin`. */
