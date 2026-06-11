@@ -103,19 +103,19 @@ describe('transform — structural edits', () => {
     expect(out).toBe('function f() {\r\n\ta()\r\n\tb()\r\nc()\r\n}')
   })
 
-  it('FormatOptions overrides the detected EOL for the inserted line break', async () => {
-    const t = await defineCodemod((root: Collection<'tsx'>) => root.find('statement_block').first().append('c()')).forTarget('tsx')
-    expect(t.transform('function f() {\n  a()\n}', {}, { eol: '\r\n' })).toBe('function f() {\n  a()\r\nc()\n}')
-  })
-
   // —— removal / unwrap: plain deletes; leftover whitespace is the formatter's job ——
 
-  it('removes an element and its separator, leaving no hole', async () => {
+  it('removes a list element and its separator, leaving no hole', async () => {
     const out = await apply(
       (root) => root.find('array').first().children().at(1).remove({ separator: true }),
       'const a = [\n  1,\n  two(),\n  3,\n];',
     )
     expect(out).toBe('const a = [\n  1,\n  \n  3,\n];')
+  })
+
+  it('removes a statement and its line with separator (no blank left)', async () => {
+    const out = await apply((root) => root.find('debugger_statement').first().remove({ separator: true }), 'a()\ndebugger\nb()')
+    expect(out).toBe('a()\nb()')
   })
 
   it('cleans the residual space of an inline element removed (does not eat siblings)', async () => {

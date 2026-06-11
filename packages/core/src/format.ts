@@ -2,26 +2,15 @@
 // formatting for free; this re-anchors an *inserted* snippet to the file's indent and line ending
 // instead of landing at column 0. Cosmetic clean-up beyond that is left to a downstream formatter.
 
-/** A source file's resolved formatting. Only the line ending matters now — indentation of an insert
- *  is taken from its anchor line, not a detected unit. */
+/** A source file's resolved formatting. Only the line ending matters — an insert's indentation is
+ *  taken from its anchor line, not a detected unit. */
 export interface FormatStyle {
   eol: string
-}
-
-/** Per-apply formatting configuration (`transform(src, ctx, options)`): override the detected EOL. */
-export interface FormatOptions {
-  /** Force the line ending (`'\n'` / `'\r\n'`) instead of guessing it. */
-  eol?: string
 }
 
 /** Guess the EOL (first line break) of `source`, defaulting to `'\n'`. */
 export function detectStyle(source: string): FormatStyle {
   return { eol: /\r\n|\n/.exec(source)?.[0] ?? '\n' }
-}
-
-/** The {@link FormatStyle} for an apply: detected from `source`, with any explicit `options` winning. */
-export function resolveStyle(source: string, options?: FormatOptions): FormatStyle {
-  return { eol: options?.eol ?? detectStyle(source).eol }
 }
 
 /** Re-indent a snippet for a line indented by `baseIndent`: the first line is left for the caller

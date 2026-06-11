@@ -1,9 +1,7 @@
 // The contract every other file in @codegraft/core (and the @codegraft/codemod / @codegraft/cli
-// packages downstream) implements against. Its only imports are leaf modules that import nothing
-// back (the generated node-type module and the format options), so this stays near the root of the
-// type graph.
+// packages downstream) implements against. Its only import is the generated node-type module (which
+// imports nothing back), so this stays near the root of the type graph.
 import type { NodeTypeAll, FieldName } from './generated/node-types.js'
-import type { FormatOptions } from './format.js'
 
 /**
  * A real tree-sitter grammar. SFC *file formats* have no id of their own — a {@link ZoneSplitter}
@@ -103,17 +101,13 @@ export interface SourceMap {
  * and is constrained to a record so it can flow into the body and `transform(src, ctx)`.
  */
 export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
-  /** Apply the codemod to `source`. Edits are rendered just enough to stay syntactically valid —
-   *  an inserted snippet re-indented to its anchor line (EOL from the source, or `options`), an
-   *  appended element given its container's separator. Cosmetic layout is a downstream formatter's job. */
-  transform(source: string, context: Ctx, options?: FormatOptions): string
+  /** Apply the codemod to `source`. Edits are rendered just enough to stay syntactically valid — an
+   *  inserted snippet re-indented to its anchor line (EOL detected from the source), an appended
+   *  element given its container's separator. Cosmetic layout is a downstream formatter's job. */
+  transform(source: string, context: Ctx): string
   /** Like {@link transform} but also returns a source map (`options.source` names the input in the
    *  map). Used by build-pipeline integrations such as `@codegraft/unplugin`. */
-  transformWithMap(
-    source: string,
-    context: Ctx,
-    options?: { source?: string } & FormatOptions,
-  ): { code: string; map: SourceMap }
+  transformWithMap(source: string, context: Ctx, options?: { source?: string }): { code: string; map: SourceMap }
 }
 
 /** A {@link Transformer} that has not yet loaded its WASM grammars. */

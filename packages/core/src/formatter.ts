@@ -40,6 +40,15 @@ export class Formatter {
     return reindent(text, indentOf(this.#source, index), this.#style.eol)
   }
 
+  /** The offset just past the line break following `index` (trailing spaces/tabs + one `\n`), or
+   *  `index` itself when `index` is not at end of line — so `remove({ separator })` can drop a
+   *  statement's now-empty line, the newline-container analogue of dropping a list element's comma. */
+  endOfLine(index: number): number {
+    let i = index
+    while (this.#source[i] === ' ' || this.#source[i] === '\t' || this.#source[i] === '\r') i++
+    return this.#source[i] === '\n' ? i + 1 : index
+  }
+
   /** Append `text` as the last element of `node` with a valid separator: a line break in a
    *  block/class body, a `,`/`;` after the last element of a delimited list, or as the sole element
    *  of an empty container. */

@@ -10,25 +10,24 @@ describe('removeUnusedImports — codegraft-run shape', () => {
     expect(targets).toEqual(['javascript', 'typescript', 'tsx'])
     // the shape `codegraft run` consumes: forTarget(target) yields a working transformer
     const transform = await codemodDefault.forTarget('typescript')
-    // the import's byte range goes; the blank line it sat on is left for a downstream formatter
-    expect(transform.transform("import { a } from 'm'\nb()", {})).toBe('\nb()')
+    expect(transform.transform("import { a } from 'm'\nb()", {})).toBe('b()')
   })
 })
 
 describe('removeUnusedImports — whole-statement removal', () => {
   it('drops a fully-unused named import', async () => {
     const t = await on('tsx')
-    expect(t.transform("import { foo } from 'm'\nbar()", {})).toBe('\nbar()')
+    expect(t.transform("import { foo } from 'm'\nbar()", {})).toBe('bar()')
   })
 
   it('drops an unused default import', async () => {
     const t = await on('tsx')
-    expect(t.transform("import foo from 'm'\nbar()", {})).toBe('\nbar()')
+    expect(t.transform("import foo from 'm'\nbar()", {})).toBe('bar()')
   })
 
   it('drops an unused namespace import', async () => {
     const t = await on('tsx')
-    expect(t.transform("import * as ns from 'm'\nbar()", {})).toBe('\nbar()')
+    expect(t.transform("import * as ns from 'm'\nbar()", {})).toBe('bar()')
   })
 
   it('drops a statement only when every binding is unused', async () => {
@@ -145,7 +144,7 @@ describe('removeUnusedImports — type-aware (value↔type)', () => {
 
   it('removes a type-only import that is unused', async () => {
     const t = await on('typescript')
-    expect(t.transform("import type { Foo } from 'm'\nbar()", {})).toBe('\nbar()')
+    expect(t.transform("import type { Foo } from 'm'\nbar()", {})).toBe('bar()')
   })
 
   it('keeps a type-only import referenced only through `typeof`', async () => {

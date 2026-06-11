@@ -13,9 +13,9 @@ import { attachComments, isComment } from './comment-attachment.js'
 import { EditCollector } from './edit-collector.js'
 import { evaluate as evaluateNode } from './evaluate.js'
 import { createResolver, type Resolver } from './resolver.js'
-import { resolveStyle, type FormatOptions } from './format.js'
+import { detectStyle } from './format.js'
 import { Formatter } from './formatter.js'
-import { trailingSeparator } from './containers.js'
+import { trailingSeparator, NEWLINE_CONTAINERS } from './containers.js'
 import { assert } from './assert.js'
 
 /** Shared per-transform state a {@link Collection} records edits into. */
@@ -263,16 +263,21 @@ export class Collection<G extends GrammarId = GrammarId> {
   }
 
   /**
-   * Remove each selected node. The byte range goes; any whitespace it owned (its indent, its line)
-   * is left for a downstream formatter to tidy. `separator` also drops the trailing `,` of a list
-   * element, so no array hole (`[1, , 3]`) or invalid dangling member is left behind.
+   * Remove each selected node. The byte range goes; leftover indentation is a downstream formatter's
+   * to tidy. `separator` also removes the delimiter to the next element so nothing dangles — the
+   * trailing `,` of a list member (no `[1, , 3]` hole / invalid object), or the trailing line break
+   * of a statement (so no blank line is left where it sat).
    */
   remove(options?: { separator?: boolean }): this {
     for (const node of this.#nodes) {
       let end = node.documentEndIndex
       if (options?.separator) {
-        const comma = trailingSeparator(node)
-        if (comma) end = comma.documentEndIndex
+        if (node.parent && NEWLINE_CONTAINERS.has(node.parent.type)) {
+          end = this.#session.formatter.endOfLine(end)
+        } else {
+          const comma = trailingSeparator(node)
+          if (comma) end = comma.documentEndIndex
+        }
       }
       this.#session.collector.remove(node.documentStartIndex, end)
     }
@@ -561,8 +566,8 @@ function dedupe(nodes: RichNode[]): RichNode[] {
  * edits, which are emitted via magic-string.
  *
  * `namespace` opts into the scan-gate (a source not mentioning it is returned untouched,
- * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form. Formatting is applied
- * on every transform; its style is detected per source and tunable via `transform`'s `FormatOptions`.
+ * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form. Inserted snippets adopt
+ * the source's detected EOL; all other layout is left to a downstream formatter.
  */
 export function createCodemodTransformer<
   Ctx extends Record<string, unknown> = Record<string, unknown>,
@@ -585,14 +590,14 @@ export function createCodemodTransformer<
     for (const grammar of grammars) await Parser.loadGrammar(grammar)
     if (namespace !== undefined) await Parser.loadGrammar('typescript')
 
-    function run(source: string, context: Ctx, options: FormatOptions | undefined): EditCollector {
+    function run(source: string, context: Ctx): EditCollector {
       const collector = new EditCollector(source)
       if (namespace !== undefined && !source.includes(namespace)) return collector
       const zones: Zone[] = splitAndParse(source, target)
       for (const zone of zones) attachComments(zone.tree)
-      // Every edit is rendered layout-aware: the file's indent unit / EOL are detected once (and
-      // overridable per apply via `options`).
-      const formatter = new Formatter(collector, source, resolveStyle(source, options))
+      // Inserted snippets adopt the source's EOL (detected once); their indentation comes from the
+      // anchor line.
+      const formatter = new Formatter(collector, source, detectStyle(source))
       // One resolver per zone tree, built on first use (only if the codemod asks for scope).
       const resolvers = new Map<RichNode, Resolver | null>()
       const session: Session = {
@@ -609,9 +614,9 @@ export function createCodemodTransformer<
     }
 
     return {
-      transform: (source, context, options) => run(source, context, options).toString(),
+      transform: (source, context) => run(source, context).toString(),
       transformWithMap(source, context, options) {
-        const collector = run(source, context, options)
+        const collector = run(source, context)
         return { code: collector.toString(), map: collector.generateMap(options?.source ?? 'input') }
       },
     }
