@@ -32,23 +32,12 @@
   "scripts": {
     "build": "tsc -b",
     "regen-ts-wasm": "bash scripts/regen-ts-wasm.sh",
+    "regen-builtin-wasm": "bash scripts/regen-builtin-wasm.sh",
     "regen-node-types": "node scripts/regen-node-types.mjs"
   },
   "dependencies": {
     "magic-string": "^0.30.0",
     "web-tree-sitter": "^0.26.9"
-  },
-  "peerDependencies": {
-    "tree-sitter-css": "^0.25.0",
-    "tree-sitter-html": "^0.23.0"
-  },
-  "peerDependenciesMeta": {
-    "tree-sitter-css": {
-      "optional": true
-    },
-    "tree-sitter-html": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "tree-sitter-css": "^0.25.0",
