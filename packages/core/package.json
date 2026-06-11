@@ -33,8 +33,8 @@
   "scripts": {
     "build": "tsc -b",
     "regen-ts-wasm": "bash scripts/regen-ts-wasm.sh",
-    "regen-builtin-wasm": "bash scripts/regen-builtin-wasm.sh",
-    "regen-web-tree-sitter": "bash scripts/regen-web-tree-sitter.sh",
+    "regen-builtin-wasm": "node scripts/regen-builtin-wasm.mjs",
+    "regen-web-tree-sitter": "node scripts/regen-web-tree-sitter.mjs",
     "regen-node-types": "node scripts/regen-node-types.mjs"
   },
   "dependencies": {
