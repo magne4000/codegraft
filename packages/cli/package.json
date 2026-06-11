@@ -1,6 +1,6 @@
 {
   "name": "@codegraft/cli",
-  "version": "0.1.0-beta.7",
+  "version": "0.1.0-beta.8",
   "description": "Codegraft CLI — apply a codemod over a file tree (codegraft run).",
   "license": "MIT",
   "type": "module",
