@@ -13,19 +13,17 @@ import { attachComments, COMMENT_TYPES } from './comment-attachment.js'
 import { EditCollector } from './edit-collector.js'
 import { evaluate as evaluateNode } from './evaluate.js'
 import { createResolver, type Resolver } from './resolver.js'
-import { detectStyle, wholeLineRange } from './format.js'
+import { resolveStyle, type FormatOptions } from './format.js'
 import { Formatter } from './formatter.js'
-import { openDelimiter, trailingSeparator, NEWLINE_CONTAINERS } from './containers.js'
+import { trailingSeparator } from './containers.js'
 import { assert } from './assert.js'
 
 /** Shared per-transform state a {@link Collection} records edits into. */
 interface Session {
   collector: EditCollector
-  /** The original source — for the line queries the verbatim path still needs (`remove({ wholeLines })`). */
-  source: string
-  /** The layout formatter when this apply opts into `format`, else `null` — with `null`, edits are
-   *  recorded verbatim (whitespace clean-up left to a downstream formatter). */
-  formatter: Formatter | null
+  /** The layout formatter every edit's rendering is delegated to (re-indent, container layout, line
+   *  collapse). Always present — formatting is applied on every transform. */
+  formatter: Formatter
   /** The binding resolver for `node`'s zone (JS/TS/TSX), or `null` if unsupported. */
   resolver(node: RichNode): Resolver | null
 }
@@ -246,7 +244,7 @@ export class Collection<G extends GrammarId = GrammarId> {
   /** Replace each selected node with `text`, or with the string a callback derives from it. */
   replaceWith(text: TextArg<G>): this {
     for (const node of this.#nodes) {
-      const next = this.#reindent(this.#text(text, node), node.documentStartIndex)
+      const next = this.#session.formatter.reindent(this.#text(text, node), node.documentStartIndex)
       this.#session.collector.overwrite(node.documentStartIndex, node.documentEndIndex, next)
     }
     return this
@@ -277,8 +275,7 @@ export class Collection<G extends GrammarId = GrammarId> {
   remove(options?: { separator?: boolean; wholeLines?: boolean; collapseBlankBefore?: boolean }): this {
     for (const node of this.#nodes) {
       if (options?.wholeLines) {
-        const [from, to] = wholeLineRange(this.#session.source, node.documentStartIndex, node.documentEndIndex, options.collapseBlankBefore)
-        this.#session.collector.remove(from, to)
+        this.#session.formatter.removeWholeLines(node.documentStartIndex, node.documentEndIndex, options.collapseBlankBefore)
         continue
       }
       let end = node.documentEndIndex
@@ -286,10 +283,8 @@ export class Collection<G extends GrammarId = GrammarId> {
         const comma = trailingSeparator(node)
         if (comma) end = comma.documentEndIndex
       }
-      // Formatting on: collapse the line when the node owned it, the way Prettier did before it was
-      // dropped. Off: verbatim delete, leaving residual blank lines for the downstream formatter.
-      if (this.#session.formatter) this.#session.formatter.removeNode(node.documentStartIndex, end)
-      else this.#session.collector.remove(node.documentStartIndex, end)
+      // Collapse the line when the node owned it, the way Prettier would have.
+      this.#session.formatter.removeNode(node.documentStartIndex, end)
     }
     return this
   }
@@ -319,9 +314,9 @@ export class Collection<G extends GrammarId = GrammarId> {
   insertBefore(text: TextArg<G>): this {
     for (const node of this.#nodes) {
       const at = node.documentStartIndex
-      let next = this.#reindent(this.#text(text, node), at)
+      let next = this.#session.formatter.reindent(this.#text(text, node), at)
       // A trailing newline would leave the displaced node at column 0 — restore its indent.
-      if (this.#session.formatter && next.endsWith('\n')) next += this.#session.formatter.indentAt(at)
+      if (next.endsWith('\n')) next += this.#session.formatter.indentAt(at)
       this.#session.collector.insertLeft(at, next)
     }
     return this
@@ -330,7 +325,7 @@ export class Collection<G extends GrammarId = GrammarId> {
   /** Insert `text` (literal or derived per node) immediately after each selected node. */
   insertAfter(text: TextArg<G>): this {
     for (const node of this.#nodes) {
-      this.#session.collector.insertRight(node.documentEndIndex, this.#reindent(this.#text(text, node), node.documentStartIndex))
+      this.#session.collector.insertRight(node.documentEndIndex, this.#session.formatter.reindent(this.#text(text, node), node.documentStartIndex))
     }
     return this
   }
@@ -350,36 +345,13 @@ export class Collection<G extends GrammarId = GrammarId> {
    *  container keeps its layout — the element lands on its own line at the elements' indent, with a
    *  trailing separator matching the container's style — while an inline one stays on one line. */
   append(text: string): this {
-    for (const node of this.#nodes) {
-      const elements = node.children
-      if (NEWLINE_CONTAINERS.has(node.type)) {
-        if (elements.length === 0) this.#fillBlock(node, text)
-        else {
-          const last = elements[elements.length - 1]
-          this.#session.collector.insertRight(last.documentEndIndex, this.#line(text, last.documentStartIndex))
-        }
-      } else if (elements.length === 0) {
-        this.#fillContainer(node, text)
-      } else {
-        this.#appendElement(node, elements[elements.length - 1], text)
-      }
-    }
+    for (const node of this.#nodes) this.#session.formatter.append(node, text)
     return this
   }
 
   /** Prepend `text` as the first element of each container — the mirror of {@link append}. */
   prepend(text: string): this {
-    for (const node of this.#nodes) {
-      const elements = node.children
-      if (NEWLINE_CONTAINERS.has(node.type)) {
-        if (elements.length === 0) this.#fillBlock(node, text)
-        else this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, this.#line(text, elements[0].documentStartIndex))
-      } else if (elements.length === 0) {
-        this.#fillContainer(node, text)
-      } else {
-        this.#prependElement(node, elements[0], text)
-      }
-    }
+    for (const node of this.#nodes) this.#session.formatter.prepend(node, text)
     return this
   }
 
@@ -389,7 +361,7 @@ export class Collection<G extends GrammarId = GrammarId> {
     const source = importSource(statement)
     const imports = this.find('import_statement' as NodeTypeOf<G>).#nodes
     if (imports.some((imp) => importSource(imp.text) === source)) return this
-    const eol = this.#session.formatter?.eol ?? '\n'
+    const eol = this.#session.formatter.eol
     if (imports.length === 0) return this.prependToFile(statement + eol)
     this.#session.collector.insertRight(imports[imports.length - 1].documentEndIndex, eol + statement)
     return this
@@ -447,7 +419,7 @@ export class Collection<G extends GrammarId = GrammarId> {
       const comment = node.leadingComments[0]
       if (!comment) continue
       const next = fn(comment.text)
-      if (next === '' && this.#session.formatter) {
+      if (next === '') {
         this.#session.formatter.removeNode(comment.documentStartIndex, comment.documentEndIndex)
       } else {
         this.#session.collector.overwrite(comment.documentStartIndex, comment.documentEndIndex, next)
@@ -473,12 +445,10 @@ export class Collection<G extends GrammarId = GrammarId> {
     const comment = node.leadingComments.find((c) => pattern.test(c.text))
     if (!comment) return this
     // The contract is "drop the directive and the gap up to the node" — so removal still runs to the
-    // node, taking any comments stacked under the directive with it. Under format it collapses those
-    // whole lines but stops at the node's line, leaving the node's own line for a following `remove`
-    // to collapse independently: the two deletes abut at the node's line start and compose. Off: the
-    // verbatim `[comment, node)` delete, residual whitespace left for the downstream formatter.
-    if (this.#session.formatter) this.#session.formatter.removeLeadingTo(comment.documentStartIndex, node.documentStartIndex)
-    else this.#session.collector.remove(comment.documentStartIndex, node.documentStartIndex)
+    // node, taking any comments stacked under the directive with it. It collapses those whole lines
+    // but stops at the node's line, leaving the node's own line for a following `remove` to collapse
+    // independently: the two deletes abut at the node's line start and compose.
+    this.#session.formatter.removeLeadingTo(comment.documentStartIndex, node.documentStartIndex)
     return this
   }
 
@@ -492,42 +462,6 @@ export class Collection<G extends GrammarId = GrammarId> {
 
   #text(arg: TextArg<G>, node: RichNode): string {
     return typeof arg === 'function' ? arg(new Collection<G>([node], this.#session)) : arg
-  }
-  // Inserted-text rendering. Each helper dispatches to the {@link Formatter} when this apply formats;
-  // the verbatim arm (no formatter) reproduces the pre-`format` behaviour byte-for-byte.
-
-  /** `text` re-indented to the line at `index`; unchanged when not formatting (or single-line). */
-  #reindent(text: string, index: number): string {
-    return this.#session.formatter ? this.#session.formatter.reindent(text, index) : text
-  }
-  /** `text` as a fresh line at the indentation of the sibling at `index`; the bare `\n` body
-   *  separator when not formatting. */
-  #line(text: string, index: number): string {
-    return this.#session.formatter ? this.#session.formatter.line(text, index) : '\n' + text
-  }
-  /** Append `text` after the last element `last` of a delimited container (layout-aware under
-   *  `format`; the historical inline comma join when not). */
-  #appendElement(node: RichNode, last: RichNode, text: string): void {
-    if (this.#session.formatter) this.#session.formatter.appendElement(node, last, text)
-    else this.#session.collector.insertRight(last.documentEndIndex, ', ' + text)
-  }
-  /** Prepend `text` before the first element `first` of a delimited container — the mirror of
-   *  {@link #appendElement}. */
-  #prependElement(node: RichNode, first: RichNode, text: string): void {
-    if (this.#session.formatter) this.#session.formatter.prependElement(node, first, text)
-    else this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text + ', ')
-  }
-  /** Insert `text` as the sole element of an empty delimited container (brace-padded under `format`;
-   *  bare insertion when not). */
-  #fillContainer(node: RichNode, text: string): void {
-    if (this.#session.formatter) this.#session.formatter.fillContainer(node, text)
-    else this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text)
-  }
-  /** Open an empty `{}` block onto its own indented line under `format` — `{}` → `{⏎  text⏎}` — or
-   *  insert `text` bare when not. */
-  #fillBlock(node: RichNode, text: string): void {
-    if (this.#session.formatter) this.#session.formatter.fillBlock(node, text)
-    else this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text)
   }
   /** Capture this node's text, delete it, and re-insert it at `target` via `place`. */
   #move(target: Collection<G>, place: (dest: RichNode, text: string) => void): this {
@@ -648,8 +582,8 @@ function rootOf(node: RichNode): RichNode {
  * edits, which are emitted via magic-string.
  *
  * `namespace` opts into the scan-gate (a source not mentioning it is returned untouched,
- * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form. Formatting is *not*
- * configured here — it's a per-apply choice passed to `transform(src, ctx, { format })`.
+ * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form. Formatting is applied
+ * on every transform; its style is detected per source and tunable via `transform`'s `FormatOptions`.
  */
 export function createCodemodTransformer<
   Ctx extends Record<string, unknown> = Record<string, unknown>,
@@ -669,19 +603,18 @@ export function createCodemodTransformer<
     if (typeof target !== 'string') await target.init()
     if (namespace !== undefined) await Parser.loadGrammar('typescript')
 
-    function run(source: string, context: Ctx, format: boolean): EditCollector {
+    function run(source: string, context: Ctx, options: FormatOptions | undefined): EditCollector {
       const collector = new EditCollector(source)
       if (namespace !== undefined && !source.includes(namespace)) return collector
       const zones: Zone[] = splitAndParse(source, target)
       for (const zone of zones) attachComments(zone.tree)
-      // Build the layout formatter only when this apply opts into formatting (detecting the file's
-      // indent unit / EOL once); else `null`, and edits record verbatim.
-      const formatter = format ? new Formatter(collector, source, detectStyle(source)) : null
+      // Every edit is rendered layout-aware: the file's indent unit / EOL are detected once (and
+      // overridable per apply via `options`).
+      const formatter = new Formatter(collector, source, resolveStyle(source, options))
       // One resolver per zone tree, built on first use (only if the codemod asks for scope).
       const resolvers = new Map<RichNode, Resolver | null>()
       const session: Session = {
         collector,
-        source,
         formatter,
         resolver(node) {
           const treeRoot = rootOf(node)
@@ -694,9 +627,9 @@ export function createCodemodTransformer<
     }
 
     return {
-      transform: (source, context, options) => run(source, context, options?.format ?? false).toString(),
+      transform: (source, context, options) => run(source, context, options).toString(),
       transformWithMap(source, context, options) {
-        const collector = run(source, context, options?.format ?? false)
+        const collector = run(source, context, options)
         return { code: collector.toString(), map: collector.generateMap(options?.source ?? 'input') }
       },
     }

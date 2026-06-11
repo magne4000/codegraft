@@ -6,7 +6,7 @@ import { assert } from '@codegraft/core/internal'
 import { run, type RunMode } from './run.js'
 
 const USAGE = `usage:
-  codegraft run <glob...> --codemod <codemod-file> [--context <json>] [--format] [--dry-run | --in-place | --out-dir <dir>]`
+  codegraft run <glob...> --codemod <codemod-file> [--context <json>] [--dry-run | --in-place | --out-dir <dir>]`
 
 /** Dispatch a `codegraft` invocation. Exported (with an injectable `cwd`) so it is testable
  *  without spawning a process; the bin auto-runs it only when invoked directly. */
@@ -23,7 +23,6 @@ async function cmdRun(args: string[], cwd: string): Promise<void> {
     options: {
       codemod: { type: 'string', short: 'c' },
       context: { type: 'string' },
-      format: { type: 'boolean' },
       'dry-run': { type: 'boolean' },
       'in-place': { type: 'boolean' },
       'out-dir': { type: 'string' },
@@ -46,7 +45,6 @@ async function cmdRun(args: string[], cwd: string): Promise<void> {
     codemodPath: resolveCodemod(values.codemod, cwd),
     context: values.context ? (JSON.parse(values.context) as Record<string, unknown>) : {},
     mode,
-    format: values.format,
   })
   process.stdout.write(
     `codegraft run: ${result.transformed.length} transformed, ${result.unchanged.length} unchanged, ${result.skipped.length} skipped\n`,

@@ -1,13 +1,13 @@
 import type { RichNode } from './types.js'
 import type { EditCollector } from './edit-collector.js'
-import { type FormatStyle, reindent, indentOf, isHSpace, lineStartOf } from './format.js'
-import { openDelimiter, trailingSeparator, isMultiline, SEMI_CONTAINERS } from './containers.js'
+import { type FormatStyle, reindent, indentOf, isHSpace, lineStartOf, wholeLineRange } from './format.js'
+import { openDelimiter, trailingSeparator, isMultiline, NEWLINE_CONTAINERS, SEMI_CONTAINERS } from './containers.js'
 
 /**
  * The layout-formatting policy: how an edit is *rendered* once the codemod has decided *what* to
- * edit. Built per-apply from the source plus a detected {@link FormatStyle} when `format` is enabled
- * (absent — `null` on the session — for verbatim runs). The {@link Collection} delegates the format
- * arm of each edit to it; the {@link EditCollector} it drives stays a pure edit buffer.
+ * edit. Built per-apply from the source plus a resolved {@link FormatStyle}. The {@link Collection}
+ * delegates the rendering of each edit to it; the {@link EditCollector} it drives stays a pure edit
+ * buffer.
  *
  * This is the single home for indentation/EOL re-rendering, container layout (separators, trailing
  * commas, brace padding), and line-collapse on removal — and the place prettier-like options
@@ -24,85 +24,46 @@ export class Formatter {
     this.#style = style
   }
 
-  /** The detected line ending — for inserting whole statements (`ensureImport`). */
+  /** The line ending — for inserting whole statements (`ensureImport`). */
   get eol(): string {
     return this.#style.eol
   }
 
-  /** The leading whitespace of the line containing `index`. */
+  /** The leading whitespace of the line containing `index` — for restoring a displaced node's indent. */
   indentAt(index: number): string {
     return indentOf(this.#source, index)
   }
 
-  // —— insertion: render the text to insert ——
-
-  /** `text` re-indented to the line at `index` (single-line text is unchanged). */
+  /** `text` re-indented to the line at `index` (single-line text is unchanged) — for a replaced or
+   *  inserted snippet. */
   reindent(text: string, index: number): string {
     return reindent(text, indentOf(this.#source, index), this.#style.eol)
   }
 
-  /** `text` as a fresh line at the indentation of the sibling at `index`. */
-  line(text: string, index: number): string {
-    const indent = indentOf(this.#source, index)
-    return this.#style.eol + indent + reindent(text, indent, this.#style.eol)
+  // —— append / prepend an element to a container ——
+
+  /** Append `text` as the last element of `node`: a fresh indented line in a block/class body, after
+   *  the last element of a comma- or `;`-separated list, or as the sole element of an empty one. */
+  append(node: RichNode, text: string): void {
+    const elements = node.children
+    if (NEWLINE_CONTAINERS.has(node.type)) {
+      if (elements.length === 0) this.#fillBlock(node, text)
+      else {
+        const last = elements[elements.length - 1]
+        this.#collector.insertRight(last.documentEndIndex, this.#line(text, last.documentStartIndex))
+      }
+    } else if (elements.length === 0) this.#fillContainer(node, text)
+    else this.#appendElement(node, elements[elements.length - 1], text)
   }
 
-  // —— insertion: emit the edit for a structural insertion ——
-
-  /** Open an empty `{}` block onto its own indented line — `{}` → `{⏎  text⏎}`. */
-  fillBlock(node: RichNode, text: string): void {
-    const blockIndent = indentOf(this.#source, node.documentStartIndex)
-    const indent = blockIndent + this.#style.indentUnit
-    const eol = this.#style.eol
-    this.#collector.insertRight(openDelimiter(node).documentEndIndex, eol + indent + reindent(text, indent, eol) + eol + blockIndent)
-  }
-
-  /** Fill an empty delimited container with its sole element: a brace container is padded
-   *  (`{}` → `{ text }`); an array / argument list is not (`[]` → `[text]`). */
-  fillContainer(node: RichNode, text: string): void {
-    const open = openDelimiter(node)
-    const pad = open.text === '{' ? ' ' : ''
-    this.#collector.insertRight(open.documentEndIndex, pad + text + pad)
-  }
-
-  /** Append `text` after the last element `last` of a delimited container — comma-separated
-   *  (array/object/arguments) or `;`-separated (interface/object-type body). A multi-line container
-   *  places the element on a fresh line at the elements' indent, mirroring the trailing-separator
-   *  style — extend an existing trailing `sep`, add the mandatory `,` a comma list omits, or rely on
-   *  the newline alone for a `;` list (where the separator between members is optional); an inline one
-   *  stays on one line. */
-  appendElement(node: RichNode, last: RichNode, text: string): void {
-    const sep = this.#separatorFor(node)
-    if (!isMultiline(node)) {
-      this.#collector.insertRight(last.documentEndIndex, `${sep} ${text}`)
-      return
-    }
-    const trailing = trailingSeparator(last, sep)
-    const line = this.line(text, last.documentStartIndex)
-    if (trailing) this.#collector.insertRight(trailing.documentEndIndex, line + sep)
-    else if (sep === ';') this.#collector.insertRight(last.documentEndIndex, line)
-    else this.#collector.insertRight(last.documentEndIndex, sep + line)
-  }
-
-  /** Prepend `text` before the first element `first` — the mirror of {@link appendElement}. The new
-   *  element is always followed by the old first, so a multi-line container puts it on a fresh line
-   *  after the open delimiter, separator-terminated (`;` only where the body terminates members with
-   *  one); an inline one inserts before the first element so brace padding stays intact
-   *  (`{ a }` → `{ x, a }`). */
-  prependElement(node: RichNode, first: RichNode, text: string): void {
-    const sep = this.#separatorFor(node)
-    if (!isMultiline(node)) {
-      this.#collector.insertLeft(first.documentStartIndex, `${text}${sep} `)
-      return
-    }
-    const terminate = sep === ',' || trailingSeparator(first, sep) !== null
-    this.#collector.insertRight(openDelimiter(node).documentEndIndex, this.line(text, first.documentStartIndex) + (terminate ? sep : ''))
-  }
-
-  /** The token that separates a container's elements — `;` for a TS interface / object type, else
-   *  `,`. The seam a future `semi`/separator option would hook into. */
-  #separatorFor(node: RichNode): string {
-    return SEMI_CONTAINERS.has(node.type) ? ';' : ','
+  /** Prepend `text` as the first element of `node` — the mirror of {@link append}. */
+  prepend(node: RichNode, text: string): void {
+    const elements = node.children
+    if (NEWLINE_CONTAINERS.has(node.type)) {
+      if (elements.length === 0) this.#fillBlock(node, text)
+      else this.#collector.insertRight(openDelimiter(node).documentEndIndex, this.#line(text, elements[0].documentStartIndex))
+    } else if (elements.length === 0) this.#fillContainer(node, text)
+    else this.#prependElement(node, elements[0], text)
   }
 
   // —— removal: emit the collapse edits ——
@@ -146,5 +107,77 @@ export class Formatter {
     const endLine = lineStartOf(this.#source, end)
     if (endLine > startLine && this.#source.slice(startLine, start).trim() === '') this.#collector.remove(startLine, endLine)
     else this.#collector.remove(start, end)
+  }
+
+  /** Delete the whole lines `[start, end)` touches — leading indentation through the trailing newline,
+   *  so nothing blank is left. With `collapseBlankBefore`, also absorb whole blank lines immediately
+   *  above (a separator before a dropped block). The explicit whole-line removal `remove({ wholeLines })`
+   *  asks for, where collapsing per node isn't enough. */
+  removeWholeLines(start: number, end: number, collapseBlankBefore = false): void {
+    const [from, to] = wholeLineRange(this.#source, start, end, collapseBlankBefore)
+    this.#collector.remove(from, to)
+  }
+
+  // —— internals ——
+
+  /** `text` as a fresh line at the indentation of the sibling at `index`. */
+  #line(text: string, index: number): string {
+    const indent = indentOf(this.#source, index)
+    return this.#style.eol + indent + reindent(text, indent, this.#style.eol)
+  }
+
+  /** Open an empty `{}` block onto its own indented line — `{}` → `{⏎  text⏎}`. */
+  #fillBlock(node: RichNode, text: string): void {
+    const blockIndent = indentOf(this.#source, node.documentStartIndex)
+    const indent = blockIndent + this.#style.indentUnit
+    const eol = this.#style.eol
+    this.#collector.insertRight(openDelimiter(node).documentEndIndex, eol + indent + reindent(text, indent, eol) + eol + blockIndent)
+  }
+
+  /** Fill an empty delimited container with its sole element: a brace container is padded
+   *  (`{}` → `{ text }`); an array / argument list is not (`[]` → `[text]`). */
+  #fillContainer(node: RichNode, text: string): void {
+    const open = openDelimiter(node)
+    const pad = open.text === '{' ? ' ' : ''
+    this.#collector.insertRight(open.documentEndIndex, pad + text + pad)
+  }
+
+  /** Append `text` after the last element `last` of a delimited container. A multi-line container
+   *  places it on a fresh line at the elements' indent, mirroring the trailing-separator style —
+   *  extend an existing trailing `sep`, add the mandatory `,` a comma list omits, or rely on the
+   *  newline alone for a `;` list (where the separator between members is optional); an inline one
+   *  stays on one line. */
+  #appendElement(node: RichNode, last: RichNode, text: string): void {
+    const sep = this.#separatorFor(node)
+    if (!isMultiline(node)) {
+      this.#collector.insertRight(last.documentEndIndex, `${sep} ${text}`)
+      return
+    }
+    const trailing = trailingSeparator(last, sep)
+    const line = this.#line(text, last.documentStartIndex)
+    if (trailing) this.#collector.insertRight(trailing.documentEndIndex, line + sep)
+    else if (sep === ';') this.#collector.insertRight(last.documentEndIndex, line)
+    else this.#collector.insertRight(last.documentEndIndex, sep + line)
+  }
+
+  /** Prepend `text` before the first element `first` — the mirror of {@link #appendElement}. The new
+   *  element is always followed by the old first, so a multi-line container puts it on a fresh line
+   *  after the open delimiter, separator-terminated (`;` only where the body terminates members with
+   *  one); an inline one inserts before the first element so brace padding stays intact
+   *  (`{ a }` → `{ x, a }`). */
+  #prependElement(node: RichNode, first: RichNode, text: string): void {
+    const sep = this.#separatorFor(node)
+    if (!isMultiline(node)) {
+      this.#collector.insertLeft(first.documentStartIndex, `${text}${sep} `)
+      return
+    }
+    const terminate = sep === ',' || trailingSeparator(first, sep) !== null
+    this.#collector.insertRight(openDelimiter(node).documentEndIndex, this.#line(text, first.documentStartIndex) + (terminate ? sep : ''))
+  }
+
+  /** The token that separates a container's elements — `;` for a TS interface / object type, else
+   *  `,`. The seam a future `semi`/separator option would hook into. */
+  #separatorFor(node: RichNode): string {
+    return SEMI_CONTAINERS.has(node.type) ? ';' : ','
   }
 }

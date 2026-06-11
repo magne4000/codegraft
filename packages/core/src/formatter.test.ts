@@ -86,12 +86,6 @@ describe('Formatter — rendering', () => {
     expect(setup('foo').f.indentAt(0)).toBe('')
   })
 
-  it('line renders a fresh line at the anchor indent and detected EOL', () => {
-    const src = 'function f() {\r\n\ta()\r\n}'
-    const { f } = setup(src, { indentUnit: '\t', eol: '\r\n' })
-    expect(f.line('b()', src.indexOf('a()'))).toBe('\r\n\tb()')
-  })
-
   it('reindent re-indents continuation lines to the anchor (single-line text unchanged)', () => {
     const src = 'function f() {\n  gen()\n}'
     const { f } = setup(src)

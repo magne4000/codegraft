@@ -44,8 +44,6 @@ export async function runFiles(opts: {
   transformers: TransformerMap
   context: Record<string, unknown>
   mode: RunMode
-  /** Render edits indentation-aware (re-indent inserts, collapse removed lines) instead of verbatim. */
-  format?: boolean
 }): Promise<RunResult> {
   const ready = new Map<string, Transformer>()
   const result: RunResult = { transformed: [], unchanged: [], skipped: [] }
@@ -65,7 +63,7 @@ export async function runFiles(opts: {
 
     const absolute = join(opts.cwd, file)
     const source = await readFile(absolute, 'utf8')
-    const output = transformer.transform(source, opts.context, { format: opts.format })
+    const output = transformer.transform(source, opts.context)
     if (output === source) {
       result.unchanged.push(file)
       continue
@@ -98,7 +96,6 @@ export async function run(opts: {
   codemodPath: string
   context: Record<string, unknown>
   mode: RunMode
-  format?: boolean
 }): Promise<RunResult> {
   const mod = (await import(pathToFileURL(opts.codemodPath).href)) as Partial<CodemodModule>
   const codemod = mod.default
@@ -116,5 +113,5 @@ export async function run(opts: {
 
   const files: string[] = []
   for await (const match of glob(opts.patterns, { cwd: opts.cwd })) files.push(match)
-  return runFiles({ files, cwd: opts.cwd, transformers, context: opts.context, mode: opts.mode, format: opts.format })
+  return runFiles({ files, cwd: opts.cwd, transformers, context: opts.context, mode: opts.mode })
 }

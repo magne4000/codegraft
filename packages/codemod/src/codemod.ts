@@ -38,7 +38,7 @@ export class Codemod<
 
   /** Interpreted mode: build a ready transformer for `target`. A grammar-annotated codemod only
    *  accepts its own bare grammar; a {@link ZoneSplitter} is always allowed (its grammars aren't
-   *  statically known). Formatting is chosen per apply — `transform(src, ctx, { format })`. */
+   *  statically known). Formatting is applied on every `transform`, tunable via its `FormatOptions`. */
   forTarget(target: G | ZoneSplitter): Promise<Transformer<Ctx>> {
     return createCodemodTransformer<Ctx, G>(target, this.fn, { namespace: this.namespace }).init()
   }

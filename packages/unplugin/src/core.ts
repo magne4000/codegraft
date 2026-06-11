@@ -22,9 +22,6 @@ export interface CodegraftOptions<Ctx extends Record<string, unknown>> {
   /** Limit which module ids are transformed (defaults to all handled extensions). */
   include?: FilterPattern
   exclude?: FilterPattern
-  /** Render edits indentation-aware (re-indent inserts, collapse removed lines) instead of verbatim.
-   *  Off by default — leave whitespace clean-up to the build's formatter. */
-  format?: boolean
 }
 
 function extensionOf(id: string): string {
@@ -68,7 +65,7 @@ export function makeUnpluginOptions<Ctx extends Record<string, unknown>>(
           pending = options.codemod.forTarget(target)
           cache.set(key, pending)
         }
-        const result = (await pending).transformWithMap(code, options.context, { source: id, format: options.format })
+        const result = (await pending).transformWithMap(code, options.context, { source: id })
         return result.code === code ? null : { code: result.code, map: result.map }
       },
     },
