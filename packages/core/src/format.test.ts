@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectStyle, reindent } from './format.js'
+import { detectStyle, reindent, lineStartOf, indentOf, isHSpace, wholeLineRange } from './format.js'
 
 describe('detectStyle', () => {
   it('detects a two-space indent', () => {
@@ -49,5 +49,46 @@ describe('reindent', () => {
 
   it('normalises line endings to eol', () => {
     expect(reindent('a\nb', '', '\r\n')).toBe('a\r\nb')
+  })
+})
+
+describe('line queries', () => {
+  it('lineStartOf finds the start of the line containing an index', () => {
+    const src = 'ab\n  cd\nef'
+    expect(lineStartOf(src, 0)).toBe(0)
+    expect(lineStartOf(src, src.indexOf('cd'))).toBe(3) // after the first '\n'
+  })
+
+  it('indentOf reports the leading whitespace of the line', () => {
+    expect(indentOf('a\n    b', 'a\n    b'.indexOf('b'))).toBe('    ')
+    expect(indentOf('foo', 0)).toBe('')
+  })
+
+  it('isHSpace recognises spaces and tabs, not newlines or out-of-range', () => {
+    expect(isHSpace(' ')).toBe(true)
+    expect(isHSpace('\t')).toBe(true)
+    expect(isHSpace('\n')).toBe(false)
+    expect(isHSpace(undefined)).toBe(false)
+  })
+})
+
+describe('wholeLineRange', () => {
+  it('spans the whole line a node occupies, through the trailing newline', () => {
+    const src = 'a\n  drop\nc'
+    const i = src.indexOf('drop')
+    expect(wholeLineRange(src, i, i + 4)).toEqual([2, 9]) // `  drop\n`
+  })
+
+  it('absorbs blank lines above with collapseBlankBefore', () => {
+    const src = 'a\n\n  drop\nc'
+    const i = src.indexOf('drop')
+    expect(wholeLineRange(src, i, i + 4, true)).toEqual([2, 10]) // the blank line + `  drop\n`
+    expect(wholeLineRange(src, i, i + 4, false)).toEqual([3, 10]) // just `  drop\n`
+  })
+
+  it('runs to the end of source when the last line has no trailing newline', () => {
+    const src = 'a\n  drop'
+    const i = src.indexOf('drop')
+    expect(wholeLineRange(src, i, i + 4)).toEqual([2, 8])
   })
 })

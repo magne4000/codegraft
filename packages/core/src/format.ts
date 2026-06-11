@@ -73,3 +73,40 @@ export function reindent(text: string, baseIndent: string, eol: string): string 
   if (base === Infinity) base = 0 // a single-or-blank-continuation snippet: nothing to strip
   return lines.map((line, i) => (i === 0 || line.trim() === '' ? line : baseIndent + line.slice(base))).join(eol)
 }
+
+// —— Pure line/whitespace queries over a source string (shared by the formatter and whole-line
+// removal). They take the source explicitly so they stay independent of the edit buffer. ——
+
+/** Offset of the first character of the line containing `index`. */
+export function lineStartOf(source: string, index: number): number {
+  return source.lastIndexOf('\n', index - 1) + 1
+}
+
+/** The leading whitespace of the line containing `index` — the base indent an inserted block should
+ *  match. Empty when the line starts with a non-whitespace character. */
+export function indentOf(source: string, index: number): string {
+  return /^[ \t]*/.exec(source.slice(lineStartOf(source, index), index))![0]
+}
+
+/** A space or tab — the horizontal whitespace separating inline list elements (`undefined` past
+ *  either end of the source is not whitespace). */
+export function isHSpace(char: string | undefined): boolean {
+  return char === ' ' || char === '\t'
+}
+
+/** The whole-line span `[from, to)` covering the lines `[start, end)` touches — from the start of
+ *  `start`'s line (leading indentation included) through the newline after `end`'s line, so nothing
+ *  blank is left behind. With `collapseBlankBefore`, also absorb whole blank lines immediately above
+ *  (a separator before a dropped block). */
+export function wholeLineRange(source: string, start: number, end: number, collapseBlankBefore = false): [number, number] {
+  let from = lineStartOf(source, start)
+  if (collapseBlankBefore) {
+    while (from > 0) {
+      const prevStart = lineStartOf(source, from - 1)
+      if (source.slice(prevStart, from - 1).trim() !== '') break // a non-blank line stops it
+      from = prevStart
+    }
+  }
+  const newline = source.indexOf('\n', end)
+  return [from, newline === -1 ? source.length : newline + 1]
+}
