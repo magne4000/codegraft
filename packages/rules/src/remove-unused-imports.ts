@@ -14,6 +14,25 @@ const BUILTIN_DIRECTIVES = new Set([
   'v-model', 'v-slot', 'v-html', 'v-text', 'v-pre', 'v-once', 'v-cloak', 'v-memo',
 ])
 
+/**
+ * Binding names a Vue template references *outside* a JS expression — component tags (`<MyWidget>` /
+ * `<my-widget>` → `MyWidget`/`myWidget`) and custom directives (`v-my-dir` → `vMyDir`), which live in
+ * vue `tag_name` / `directive_name` nodes. Native elements (`<div>`) and built-in directives are
+ * excluded — never an imported binding. These are always value uses; empty for a non-SFC file.
+ */
+function vueTemplateBindings(root: Collection): Set<string> {
+  const names = new Set<string>()
+  root.find('tag_name').forEach((tag) => {
+    const name = tag.text
+    if (/^[A-Z]/.test(name) || name.includes('-')) names.add(pascalCase(name)).add(camelCase(name))
+  })
+  root.find('directive_name').forEach((dir) => {
+    const name = dir.text
+    if (name.startsWith('v-') && !BUILTIN_DIRECTIVES.has(name)) names.add('v' + pascalCase(name.slice(2)))
+  })
+  return names
+}
+
 /** The tree (zone) root a node belongs to — for telling a binding's own zone from its siblings. */
 const treeRootOf = (node: RichNode): RichNode => {
   let cur = node
@@ -39,6 +58,10 @@ const isValueRef = (ref: RichNode): boolean => {
  * `<script>` — is kept, not pruned.
  */
 export const removeUnusedImports = defineCodemod((root) => {
+  // True only when there is more than one parsed zone (a Vue SFC). A plain single-grammar file has no
+  // sibling zone to consult, so it skips the cross-zone work below — the sibling scan and template names.
+  const multiZone = root.nodes().length > 1
+
   // The resolver reports only value (`identifier`) references, so type-position uses are gathered
   // separately: every `type_identifier`, plus the `identifier` head of a qualified type (`NS.x`).
   const typeRefs = new Set<string>()
@@ -53,19 +76,8 @@ export const removeUnusedImports = defineCodemod((root) => {
   // `isType` binding scores `valueUsed === false` — and is wrongly pruned.
   root.find('type_query').forEach((query) => query.find('identifier').forEach((id) => typeRefs.add(id.text)))
 
-  // Names the template references *outside* a JS expression — component tags (`<MyWidget>` /
-  // `<my-widget>` → `MyWidget`/`myWidget`) and custom directives (`v-my-dir` → `vMyDir`). They live in
-  // vue `tag_name` / `directive_name` nodes (none in a non-SFC file) and are always value uses. Native
-  // elements (`<div>`) and the built-in directives are skipped — never an imported binding.
-  const templateNames = new Set<string>()
-  root.find('tag_name').forEach((tag) => {
-    const name = tag.text
-    if (/^[A-Z]/.test(name) || name.includes('-')) templateNames.add(pascalCase(name)).add(camelCase(name))
-  })
-  root.find('directive_name').forEach((dir) => {
-    const name = dir.text
-    if (name.startsWith('v-') && !BUILTIN_DIRECTIVES.has(name)) templateNames.add('v' + pascalCase(name.slice(2)))
-  })
+  // Component tags / custom directives a Vue template references — a value use the JS scans can't see.
+  const templateNames = multiZone ? vueTemplateBindings(root) : new Set<string>()
 
   // The resolver abstains on the whole file at a construct it can't rename through — a TS namespace,
   // `declare module`/`declare global`. Use-detection still holds (an import is used iff its name
@@ -93,10 +105,6 @@ export const removeUnusedImports = defineCodemod((root) => {
     }
     return fallback.dynamic ? null : (fallback.refs.get(name) ?? [])
   }
-
-  // >1 only for a multi-zone file (a Vue SFC): the gate for the cross-zone use scan below, so a
-  // plain single-grammar file never pays for it.
-  const zoneCount = root.nodes().length
 
   interface Binding {
     /** A named specifier (`{ x }`), as opposed to a default or `* as ns`. */
@@ -146,7 +154,7 @@ export const removeUnusedImports = defineCodemod((root) => {
       // resolver succeeded — skipping it is exactly what hid template usage. An unsound scan
       // (`with`/`eval`) with sibling zones present can't rule a use out, so abstain.
       let usedInSibling = false
-      if (zoneCount > 1) {
+      if (multiZone) {
         const occurrences = syntacticRefs(binding.local.text)
         if (!occurrences) return
         const ownTree = treeRootOf(declaration)

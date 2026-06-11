@@ -330,4 +330,12 @@ describe('removeUnusedImports — Vue SFC cross-zone use (kept, not pruned)', ()
     ].join('\n')
     expect(t.transform(withStyle, {})).toContain("import { themeColor } from './theme'")
   })
+
+  it('still prunes a script import shadowed by a local — own-tree precision is not lost cross-zone', async () => {
+    const t = await on(vueSplitter)
+    // `foo` resolves to the param inside `g`, never the import, and the template does not use it; the
+    // cross-zone scan must exclude these own-tree occurrences, not count them as a sibling use.
+    const out = t.transform(sfc('<div/>', "import { foo } from 'm'\nfunction g(foo) { return foo }\ng(1)"), {})
+    expect(out).not.toContain('import')
+  })
 })

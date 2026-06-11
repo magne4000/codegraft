@@ -78,6 +78,11 @@ function sectionZone(section: Node, source: string): RawZone | null {
   }
 }
 
+/** Depth-first walk over named children; `visit` returns `false` to stop descending into a node. */
+function walk(node: Node, visit: (n: Node) => boolean): void {
+  if (visit(node)) for (const child of namedChildren(node)) walk(child, visit)
+}
+
 /**
  * Every JS expression embedded in the template — interpolation bodies, directive values, and dynamic
  * directive arguments (`:[expr]`) — as its own zone, so a codemod sees real `identifier` /
@@ -93,19 +98,18 @@ function sectionZone(section: Node, source: string): RawZone | null {
  */
 function templateExpressionZones(template: Node, source: string): RawZone[] {
   const zones: RawZone[] = []
-  const visit = (node: Node): void => {
+  walk(template, (node) => {
     if (node.type === 'interpolation') {
       const body = childByType(node, 'raw_text')
       if (body) pushExpr(zones, body.text, body.startIndex)
-      return
+      return false
     }
     if (node.type === 'directive_attribute') {
       collectDirective(node, source, zones)
-      return
+      return false
     }
-    for (const child of namedChildren(node)) visit(child)
-  }
-  visit(template)
+    return true
+  })
   return zones
 }
 
@@ -173,15 +177,12 @@ function styleBindZones(section: Node): RawZone[] {
   const body = childByType(section, 'raw_text')
   if (!body || !body.text.includes('v-bind(')) return []
   const zones: RawZone[] = []
-  const visit = (node: Node): void => {
-    if (node.type === 'call_expression' && childByType(node, 'function_name')?.text === 'v-bind') {
-      const arg = firstDescendant(node, 'plain_value') ?? firstDescendant(node, 'string_content')
-      if (arg) pushExpr(zones, arg.text, body.startIndex + arg.startIndex) // body offset is document-absolute
-      return
-    }
-    for (const child of namedChildren(node)) visit(child)
-  }
-  visit(Parser.parse(body.text, 'css').rootNode)
+  walk(Parser.parse(body.text, 'css').rootNode, (node) => {
+    if (node.type !== 'call_expression' || childByType(node, 'function_name')?.text !== 'v-bind') return true
+    const arg = firstDescendant(node, 'plain_value') ?? firstDescendant(node, 'string_content')
+    if (arg) pushExpr(zones, arg.text, body.startIndex + arg.startIndex) // body offset is document-absolute
+    return false
+  })
   return zones
 }
 
