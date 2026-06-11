@@ -55,12 +55,21 @@ function detectIndentUnit(source: string): string {
 }
 
 /** Re-indent a snippet for a line indented by `baseIndent`: the first line is left for the caller
- *  to position, each following non-blank line is prefixed with `baseIndent` (its own internal
- *  indentation preserved), and line breaks become `eol`. */
+ *  to position, every following non-blank line is re-anchored to `baseIndent` (its indentation
+ *  relative to the block's own base preserved), and line breaks become `eol`.
+ *
+ *  The block's base is the least-indented continuation line — *not* the first line, which a node's
+ *  `.text` leaves at column 0 even when the node sits deep in the source. Stripping that base before
+ *  applying `baseIndent` re-anchors a "hanging" block (continuation lines still at their source
+ *  indent) to the target, instead of stacking `baseIndent` on top of the indent already there. */
 export function reindent(text: string, baseIndent: string, eol: string): string {
   if (!text.includes('\n')) return text
-  return text
-    .split(/\r\n|\n/)
-    .map((line, i) => (i === 0 || line.trim() === '' ? line : baseIndent + line))
-    .join(eol)
+  const lines = text.split(/\r\n|\n/)
+  let base = Infinity
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '') continue
+    base = Math.min(base, /^[ \t]*/.exec(lines[i])![0].length)
+  }
+  if (base === Infinity) base = 0 // a single-or-blank-continuation snippet: nothing to strip
+  return lines.map((line, i) => (i === 0 || line.trim() === '' ? line : baseIndent + line.slice(base))).join(eol)
 }

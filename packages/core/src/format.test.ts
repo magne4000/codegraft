@@ -36,6 +36,13 @@ describe('reindent', () => {
     expect(reindent('function f() {\n  return 1\n}', '    ', '\n')).toBe('function f() {\n      return 1\n    }')
   })
 
+  it('re-anchors a hanging block by its own base, not the first line', () => {
+    // A node's `.text` leaves line 0 flush while its continuation lines keep their source indent
+    // (4 and 2). The base is the least-indented line (2); re-anchoring to baseIndent preserves the
+    // block's own step (member one level past its brace) instead of stacking on the 4/2 already there.
+    expect(reindent('interface B {\n    y: Y;\n  }', '    ', '\n')).toBe('interface B {\n      y: Y;\n    }')
+  })
+
   it('does not indent blank lines', () => {
     expect(reindent('a\n\nb', '  ', '\n')).toBe('a\n\n  b')
   })

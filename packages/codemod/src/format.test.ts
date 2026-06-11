@@ -25,6 +25,18 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('function f() {\n  gen()\n}', {})).toBe('function f() {\n  function g() {\n    return 1\n  }\n}')
   })
 
+  it('re-anchors an appended multi-line block to the container, not stacking its source indent', async () => {
+    // mergeDts relocates a whole `interface` by appending its `.text` — a block whose first line is
+    // flush but whose body keeps its source indent. It must match its new sibling (member and closing
+    // brace aligned), not land a level too deep from the indent already on its continuation lines.
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('statement_block').first().append('interface B {\n    y: Y;\n  }')
+    }).forTarget('tsx')
+    expect(t.transform('namespace V {\n  interface A {\n    x: X;\n  }\n}', {})).toBe(
+      'namespace V {\n  interface A {\n    x: X;\n  }\n  interface B {\n    y: Y;\n  }\n}',
+    )
+  })
+
   it('fills an empty block, one level in and closing on its own line', async () => {
     const t = await defineCodemod({ format: true }, (root) => {
       root.find('statement_block').first().append('return 1')
