@@ -96,10 +96,18 @@ export interface SourceMap {
  * and is constrained to a record so it can flow into the body and `transform(src, ctx)`.
  */
 export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
-  transform(source: string, context: Ctx): string
-  /** Like {@link transform} but also returns a source map (`options.source` names the
-   *  input in the map). Used by build-pipeline integrations such as `@codegraft/unplugin`. */
-  transformWithMap(source: string, context: Ctx, options?: { source?: string }): { code: string; map: SourceMap }
+  /** Apply the codemod to `source`. `options.format` opts into indentation-aware rendering of the
+   *  recorded edits — re-indent inserts to the file's unit/EOL, collapse a removed node's line — a
+   *  per-apply choice, not baked into the codemod. Off by default, so the output is byte-identical to
+   *  the verbatim edits, leaving whitespace clean-up to a downstream formatter. */
+  transform(source: string, context: Ctx, options?: { format?: boolean }): string
+  /** Like {@link transform} but also returns a source map (`options.source` names the input in the
+   *  map). Used by build-pipeline integrations such as `@codegraft/unplugin`. */
+  transformWithMap(
+    source: string,
+    context: Ctx,
+    options?: { source?: string; format?: boolean },
+  ): { code: string; map: SourceMap }
 }
 
 /** A {@link Transformer} that has not yet loaded its WASM grammars. */

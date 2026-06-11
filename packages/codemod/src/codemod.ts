@@ -15,12 +15,6 @@ export interface CodemodConfig {
    * optimisation — files that never mention it are returned untouched without being parsed.
    */
   namespace?: string
-  /**
-   * Opt into indentation-aware insertion: code recorded by `replaceWith`/`append`/`insertBefore`/…
-   * is re-indented to the file's detected indent unit and line ending, instead of landing at
-   * column 0. Off by default — without it, inserted whitespace clean-up is left to Prettier.
-   */
-  format?: boolean
 }
 
 /**
@@ -36,19 +30,17 @@ export class Codemod<
 > {
   readonly fn: CodemodFn<Ctx, G>
   readonly namespace: string | undefined
-  readonly format: boolean
 
-  constructor(fn: CodemodFn<Ctx, G>, namespace?: string, format = false) {
+  constructor(fn: CodemodFn<Ctx, G>, namespace?: string) {
     this.fn = fn
     this.namespace = namespace
-    this.format = format
   }
 
   /** Interpreted mode: build a ready transformer for `target`. A grammar-annotated codemod only
    *  accepts its own bare grammar; a {@link ZoneSplitter} is always allowed (its grammars aren't
-   *  statically known). */
+   *  statically known). Formatting is chosen per apply — `transform(src, ctx, { format })`. */
   forTarget(target: G | ZoneSplitter): Promise<Transformer<Ctx>> {
-    return createCodemodTransformer<Ctx, G>(target, this.fn, { namespace: this.namespace, format: this.format }).init()
+    return createCodemodTransformer<Ctx, G>(target, this.fn, { namespace: this.namespace }).init()
   }
 }
 
@@ -71,5 +63,5 @@ export function defineCodemod<Ctx extends Record<string, unknown> = Record<strin
 ): Codemod<Ctx, G> {
   const fn = maybeFn ?? (configOrFn as CodemodFn<Ctx, G>)
   const config = maybeFn ? (configOrFn as CodemodConfig) : undefined
-  return new Codemod<Ctx, G>(fn, config?.namespace, config?.format)
+  return new Codemod<Ctx, G>(fn, config?.namespace)
 }

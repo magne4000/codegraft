@@ -725,7 +725,8 @@ function rootOf(node: RichNode): RichNode {
  * edits, which are emitted via magic-string.
  *
  * `namespace` opts into the scan-gate (a source not mentioning it is returned untouched,
- * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form.
+ * unparsed) and ensures the TypeScript grammar for `evaluate`'s string form. Formatting is *not*
+ * configured here — it's a per-apply choice passed to `transform(src, ctx, { format })`.
  */
 export function createCodemodTransformer<
   Ctx extends Record<string, unknown> = Record<string, unknown>,
@@ -733,10 +734,9 @@ export function createCodemodTransformer<
 >(
   target: GrammarId | ZoneSplitter,
   codemod: (root: Collection<G>, context: Ctx) => void,
-  options?: { namespace?: string; format?: boolean },
+  options?: { namespace?: string },
 ): LazyTransformer<Ctx> {
   const namespace = options?.namespace
-  const format = options?.format ?? false
   let pending: Promise<Transformer<Ctx>> | null = null
 
   async function build(): Promise<Transformer<Ctx>> {
@@ -746,12 +746,12 @@ export function createCodemodTransformer<
     if (typeof target !== 'string') await target.init()
     if (namespace !== undefined) await Parser.loadGrammar('typescript')
 
-    function run(source: string, context: Ctx): EditCollector {
+    function run(source: string, context: Ctx, format: boolean): EditCollector {
       const collector = new EditCollector(source)
       if (namespace !== undefined && !source.includes(namespace)) return collector
       const zones: Zone[] = splitAndParse(source, target)
       for (const zone of zones) attachComments(zone.tree)
-      // Detect the file's indent unit / EOL once, only when the codemod opts into formatting.
+      // Detect the file's indent unit / EOL once, only when this apply opts into formatting.
       const style = format ? detectStyle(source) : null
       // One resolver per zone tree, built on first use (only if the codemod asks for scope).
       const resolvers = new Map<RichNode, Resolver | null>()
@@ -769,9 +769,9 @@ export function createCodemodTransformer<
     }
 
     return {
-      transform: (source, context) => run(source, context).toString(),
+      transform: (source, context, options) => run(source, context, options?.format ?? false).toString(),
       transformWithMap(source, context, options) {
-        const collector = run(source, context)
+        const collector = run(source, context, options?.format ?? false)
         return { code: collector.toString(), map: collector.generateMap(options?.source ?? 'input') }
       },
     }

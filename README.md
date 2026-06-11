@@ -204,15 +204,15 @@ Every consumer — `forTarget`, `codegraft run`, and `@codegraft/unplugin` — r
 
 Because Codegraft edits byte ranges rather than reprinting, **code you don't touch keeps its exact formatting for free** — there's no reprint step to disturb it (recast's headline feature, but unconditional here). What's left is the *inserted* text: by default a snippet lands verbatim, so a new statement appended to a block sits at column 0.
 
-Opt into `defineCodemod({ format: true }, …)` to make insertions indentation-aware. Codegraft detects the file's indent unit and line ending (a `detect-indent`-style guess, falling back to two spaces / `\n`) and re-indents what `replaceWith`/`append`/`prepend`/`insertBefore`/`insertAfter`/`addLeadingComment`/`ensureImport` record — matching the surrounding indentation and preserving the snippet's own internal indentation:
+Formatting is an **apply-time** choice, not part of the codemod: pass `{ format: true }` to `transform(src, ctx, { format: true })` (or `transformWithMap`, the `--format` flag of `codegraft run`, or the unplugin `format` option). The same format-agnostic codemod can therefore render verbatim in one place and formatted in another. With it on, Codegraft detects the file's indent unit and line ending (a `detect-indent`-style guess, falling back to two spaces / `\n`) and re-indents what `replaceWith`/`append`/`prepend`/`insertBefore`/`insertAfter`/`addLeadingComment`/`ensureImport` record — matching the surrounding indentation and preserving the snippet's own internal indentation:
 
 ```ts
-// with { format: true }, appending into:   function f() {␊  a()␊}
+// transform(src, ctx, { format: true }), appending into:   function f() {␊  a()␊}
 root.find('statement_block').first().append('b()')
 // →  function f() {␊  a()␊  b()␊}          (without it: b() lands at column 0)
 ```
 
-It's a guess, not a formatter: it handles indentation and EOLs (the readability win for the bundler path, where running Prettier per-module is impractical) and leaves quote/semicolon/trailing-comma style to the snippet you write (and to Prettier). Only newline-separated blocks (statement/class bodies) are re-indented; comma-separated containers like arrays and argument lists stay inline.
+It's a guess, not a formatter: it handles indentation, EOLs, and a removed node's line-collapse (the readability win for the bundler path, where running Prettier per-module is impractical) and leaves quote/semicolon style to the snippet you write (and to Prettier). An element appended/prepended to a multi-line array/object/interface lands on its own line, separator-matched to the surrounding layout; an inline container stays inline.
 
 ## Development
 
