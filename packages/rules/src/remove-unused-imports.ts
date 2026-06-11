@@ -33,13 +33,6 @@ function vueTemplateBindings(root: Collection): Set<string> {
   return names
 }
 
-/** The tree (zone) root a node belongs to — for telling a binding's own zone from its siblings. */
-const treeRootOf = (node: RichNode): RichNode => {
-  let cur = node
-  while (cur.parent) cur = cur.parent
-  return cur
-}
-
 /** A value identifier that is not the head of a qualified type (`NS.Thing`, which is a type use). */
 const isValueRef = (ref: RichNode): boolean => {
   const parent = ref.parent
@@ -157,8 +150,8 @@ export const removeUnusedImports = defineCodemod((root) => {
       if (multiZone) {
         const occurrences = syntacticRefs(binding.local.text)
         if (!occurrences) return
-        const ownTree = treeRootOf(declaration)
-        usedInSibling = occurrences.some((ref) => treeRootOf(ref) !== ownTree && isValueRef(ref))
+        const ownTree = declaration.root
+        usedInSibling = occurrences.some((ref) => ref.root !== ownTree && isValueRef(ref))
       }
 
       const valueUsed =

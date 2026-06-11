@@ -8,7 +8,6 @@ export type CodemodFn<Ctx extends Record<string, unknown>, G extends GrammarId =
   context: Ctx,
 ) => void
 
-/** Options for a codemod. */
 export interface CodemodConfig {
   /**
    * The build-time global marker the codemod keys off (e.g. `$$`). Enables the source-scan

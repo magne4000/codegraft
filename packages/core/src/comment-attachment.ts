@@ -1,13 +1,9 @@
 import type { GrammarId, RichNode } from './types.js'
 
 /**
- * The node types that count as comments, per grammar — the single source of truth
- * for "what is a comment node". Consumed by the attachment pass below and by
- * `rich-node.ts` to keep comments out of `RichNode.children`.
- *
- * Every grammar Codegraft targets today names its comment node `comment`; the map is
- * kept per-grammar so a future grammar with a different name slots in without
- * touching either consumer.
+ * The comment node types per grammar — the single source of truth behind {@link isComment}.
+ * Every grammar Codegraft targets names its comment node `comment`; keeping the map per-grammar lets
+ * a future grammar with a different name slot in without touching any consumer.
  */
 export const COMMENT_TYPES: Record<GrammarId, ReadonlySet<string>> = {
   javascript: new Set(['comment']),
@@ -43,7 +39,9 @@ function visit(node: RichNode): void {
   classify(node)
 }
 
-function isComment(node: RichNode): boolean {
+/** Whether `node` is a comment in its grammar — the shared predicate behind keeping comments out of
+ *  `children`, skipping them in container queries, and the `findComments` selector. */
+export function isComment(node: RichNode): boolean {
   return COMMENT_TYPES[node.language].has(node.type)
 }
 
