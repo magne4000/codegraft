@@ -1,6 +1,32 @@
 import type { Collection, GrammarId, RichNode } from '@codegraft/core'
 import { defineCodemod } from '@codegraft/codemod'
 
+// `my-widget` / `MyWidget` / `myWidget` → `MyWidget`; each hyphen drops and caps the next letter.
+const pascalCase = (name: string): string => name.replace(/(^|-)([a-z])/g, (_m, _sep, c: string) => c.toUpperCase())
+const camelCase = (name: string): string => {
+  const pascal = pascalCase(name)
+  return pascal.charAt(0).toLowerCase() + pascal.slice(1)
+}
+
+// Vue's built-in directives bind no import, unlike a custom `v-my-dir` (which maps to a `vMyDir` local).
+const BUILTIN_DIRECTIVES = new Set([
+  'v-if', 'v-else', 'v-else-if', 'v-for', 'v-show', 'v-bind', 'v-on',
+  'v-model', 'v-slot', 'v-html', 'v-text', 'v-pre', 'v-once', 'v-cloak', 'v-memo',
+])
+
+/** The tree (zone) root a node belongs to — for telling a binding's own zone from its siblings. */
+const treeRootOf = (node: RichNode): RichNode => {
+  let cur = node
+  while (cur.parent) cur = cur.parent
+  return cur
+}
+
+/** A value identifier that is not the head of a qualified type (`NS.Thing`, which is a type use). */
+const isValueRef = (ref: RichNode): boolean => {
+  const parent = ref.parent
+  return !(parent?.type === 'nested_type_identifier' && parent.child('module') === ref)
+}
+
 /**
  * Remove imports with no reference, and rewrite a value import used only in type positions into a
  * type import — the analogue of `eslint-plugin-unused-imports` plus the import half of
@@ -8,7 +34,9 @@ import { defineCodemod } from '@codegraft/codemod'
  * import whose use isn't decidable is kept. The scope resolver's rename-safety abstentions (a TS
  * namespace, `declare module`) don't block pruning — a syntactic use-scan covers them; only `with`
  * and `eval`, which can reach a name invisibly, force a no-op. Runs on every JS-family grammar and,
- * through a `ZoneSplitter`, the `<script>` of a Vue SFC.
+ * through a `ZoneSplitter`, a Vue SFC: a binding used only from a sibling zone — the template's
+ * expression zones, a component `<Tag>`, a custom `v-directive`, or a second `<script>` — is kept,
+ * not pruned. (A `<style> v-bind()` reference is not yet covered.)
  */
 export const removeUnusedImports = defineCodemod((root) => {
   // The resolver reports only value (`identifier`) references, so type-position uses are gathered
@@ -24,6 +52,20 @@ export const removeUnusedImports = defineCodemod((root) => {
   // Without this, a type-only import used solely through `typeof` reads as unreferenced — its
   // `isType` binding scores `valueUsed === false` — and is wrongly pruned.
   root.find('type_query').forEach((query) => query.find('identifier').forEach((id) => typeRefs.add(id.text)))
+
+  // Names the template references *outside* a JS expression — component tags (`<MyWidget>` /
+  // `<my-widget>` → `MyWidget`/`myWidget`) and custom directives (`v-my-dir` → `vMyDir`). They live in
+  // vue `tag_name` / `directive_name` nodes (none in a non-SFC file) and are always value uses. Native
+  // elements (`<div>`) and the built-in directives are skipped — never an imported binding.
+  const templateNames = new Set<string>()
+  root.find('tag_name').forEach((tag) => {
+    const name = tag.text
+    if (/^[A-Z]/.test(name) || name.includes('-')) templateNames.add(pascalCase(name)).add(camelCase(name))
+  })
+  root.find('directive_name').forEach((dir) => {
+    const name = dir.text
+    if (name.startsWith('v-') && !BUILTIN_DIRECTIVES.has(name)) templateNames.add('v' + pascalCase(name.slice(2)))
+  })
 
   // The resolver abstains on the whole file at a construct it can't rename through — a TS namespace,
   // `declare module`/`declare global`. Use-detection still holds (an import is used iff its name
@@ -51,6 +93,10 @@ export const removeUnusedImports = defineCodemod((root) => {
     }
     return fallback.dynamic ? null : (fallback.refs.get(name) ?? [])
   }
+
+  // >1 only for a multi-zone file (a Vue SFC): the gate for the cross-zone use scan below, so a
+  // plain single-grammar file never pays for it.
+  const zoneCount = root.nodes().length
 
   interface Binding {
     /** A named specifier (`{ x }`), as opposed to a default or `* as ns`. */
@@ -92,13 +138,25 @@ export const removeUnusedImports = defineCodemod((root) => {
       const refNodes = resolved ? resolved.nodes() : syntacticRefs(binding.local.text)
       if (!refNodes) return // resolver abstained and `with`/`eval` make use-detection unsound — skip
       const declaration = binding.local.node
+
+      // The resolver (and the syntactic fallback's own-tree refs) only sees the binding's own zone
+      // tree. In a multi-zone file — a Vue SFC's template-expression zones, a second `<script>` — the
+      // same binding is reachable from a sibling zone, where the use lexes as a plain value identifier
+      // and is always a value use (a template / `v-bind` runs at runtime). Consult that even when the
+      // resolver succeeded — skipping it is exactly what hid template usage. An unsound scan
+      // (`with`/`eval`) with sibling zones present can't rule a use out, so abstain.
+      let usedInSibling = false
+      if (zoneCount > 1) {
+        const occurrences = syntacticRefs(binding.local.text)
+        if (!occurrences) return
+        const ownTree = treeRootOf(declaration)
+        usedInSibling = occurrences.some((ref) => treeRootOf(ref) !== ownTree && isValueRef(ref))
+      }
+
       const valueUsed =
-        !binding.isType &&
-        refNodes.some((ref) => {
-          // A qualified-type head (`NS.Thing`) lexes as a value identifier but is a type use.
-          const parent = ref.parent
-          return ref !== declaration && !(parent?.type === 'nested_type_identifier' && parent.child('module') === ref)
-        })
+        templateNames.has(binding.local.text) || // a component tag / custom directive (a value use)
+        usedInSibling ||
+        (!binding.isType && refNodes.some((ref) => ref !== declaration && isValueRef(ref)))
       if (!valueUsed && !typeRefs.has(binding.local.text)) continue // unreferenced
       kept.push({ ...binding, typeOnly: !valueUsed })
     }

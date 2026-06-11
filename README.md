@@ -130,7 +130,8 @@ import { vueSplitter } from '@codegraft/vue'
 const transform = await removeUnusedImports.forTarget('tsx')      // JS / JSX / TS / TSX
 transform.transform(source, {})
 
-// Vue SFC — the splitter feeds the rule only the script zone
+// Vue SFC — prunes the <script>, but keeps imports used only from the template
+// (a `<Tag>`, a `v-directive`, or an interpolation/binding expression)
 const vue = await removeUnusedImports.forTarget(vueSplitter)
 ```
 

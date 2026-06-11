@@ -272,3 +272,49 @@ describe('removeUnusedImports — Vue SFC (script only)', () => {
     expect(out).toContain('<h1>{{ title }}</h1>') // template untouched
   })
 })
+
+describe('removeUnusedImports — Vue SFC cross-zone use (kept, not pruned)', () => {
+  const sfc = (template: string, script: string) =>
+    ['<template>', template, '</template>', '<script setup lang="ts">', script, '</script>', ''].join('\n')
+
+  it('keeps an import used only in an interpolation', async () => {
+    const t = await on(vueSplitter)
+    expect(t.transform(sfc('<p>{{ greet }}</p>', "import { greet } from 'm'"), {})).toContain("import { greet } from 'm'")
+  })
+
+  it('keeps an import used only in a binding expression', async () => {
+    const t = await on(vueSplitter)
+    const out = t.transform(sfc(`<b :class="ok ? cls : ''"/>`, "import { cls } from 'm'\nconst ok = true"), {})
+    expect(out).toContain("import { cls } from 'm'")
+  })
+
+  it('keeps a component import used only as a kebab or PascalCase tag, as a value import', async () => {
+    const t = await on(vueSplitter)
+    for (const tag of ['<my-widget/>', '<MyWidget/>']) {
+      const out = t.transform(sfc(tag, "import MyWidget from './MyWidget.vue'"), {})
+      expect(out).toContain("import MyWidget from './MyWidget.vue'") // value import, not demoted to `import type`
+    }
+  })
+
+  it('keeps a custom-directive import (`v-focus` → `vFocus`)', async () => {
+    const t = await on(vueSplitter)
+    expect(t.transform(sfc('<input v-focus>', "import { vFocus } from './directives'"), {})).toContain('vFocus')
+  })
+
+  it('keeps an import in <script> used only from <script setup>', async () => {
+    const t = await on(vueSplitter)
+    const two = ['<script lang="ts">', "import { A } from './a'", '</script>', '<script setup lang="ts">', 'A()', '</script>', ''].join('\n')
+    expect(t.transform(two, {})).toContain("import { A } from './a'")
+  })
+
+  it('still drops a dead specifier from a statement whose other half is used in the template', async () => {
+    const t = await on(vueSplitter)
+    expect(t.transform(sfc('<div>{{ a }}</div>', "import { a, b } from 'm'"), {})).toContain("import { a } from 'm'")
+  })
+
+  it('does not let a native element keep a same-named import (the tag filter)', async () => {
+    const t = await on(vueSplitter)
+    // `<div>` is a native element, not a `Div` component — the import is genuinely unused.
+    expect(t.transform(sfc('<div/>', "import { Div } from './div'"), {})).not.toContain('import')
+  })
+})
