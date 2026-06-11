@@ -284,13 +284,9 @@ export class Collection<G extends GrammarId = GrammarId> {
         const comma = trailingSeparator(node)
         if (comma) end = comma.documentEndIndex
       }
-      // Collapse the line when the node owned it, the way Prettier would have. When the node is the
-      // last / first surviving element of its container, also collapse a blank line that preceded /
-      // followed it, which would otherwise dangle before the closing / after the opening delimiter.
-      this.#session.formatter.removeNode(node.documentStartIndex, end, {
-        before: isLastSurviving(node, removing),
-        after: isFirstSurviving(node, removing),
-      })
+      // Collapse the line when the node owned it, the way Prettier would have — and a blank line that
+      // would dangle against the container's edge once the rest of the removal set is gone.
+      this.#session.formatter.removeNode(node.documentStartIndex, end, blankCollapse(node, removing))
     }
     return this
   }
@@ -557,25 +553,19 @@ function siblingAt(node: RichNode, delta: number): RichNode | null {
   return i === -1 ? null : (siblings![i + delta] ?? null)
 }
 
-/** Whether `node` is the last child of its container once every node in `removing` is gone — i.e.
- *  every following named sibling is itself being removed. Such a node's preceding blank line would
- *  dangle before the container's close, so its removal collapses it. */
-function isLastSurviving(node: RichNode, removing: Set<RichNode>): boolean {
+/** Which dangling blank lines a removed `node`'s line collapse should also absorb, given the whole
+ *  set `removing`. `before` when every following sibling is removed too (the node ends up last, so a
+ *  blank that preceded it would dangle before the container's close); `after` when every preceding
+ *  one is (it ends up first, so a following blank would dangle after the open). */
+function blankCollapse(node: RichNode, removing: Set<RichNode>): { before: boolean; after: boolean } {
   const siblings = node.parent?.children
   const i = siblings?.indexOf(node) ?? -1
-  if (i === -1) return false
-  for (let j = i + 1; j < siblings!.length; j++) if (!removing.has(siblings![j])) return false
-  return true
-}
-
-/** The mirror of {@link isLastSurviving}: whether every preceding named sibling is also being
- *  removed, so `node`'s following blank line would dangle after the container's open. */
-function isFirstSurviving(node: RichNode, removing: Set<RichNode>): boolean {
-  const siblings = node.parent?.children
-  const i = siblings?.indexOf(node) ?? -1
-  if (i === -1) return false
-  for (let j = 0; j < i; j++) if (!removing.has(siblings![j])) return false
-  return true
+  if (i === -1) return { before: false, after: false }
+  const allRemoved = (from: number, to: number): boolean => {
+    for (let j = from; j < to; j++) if (!removing.has(siblings![j])) return false
+    return true
+  }
+  return { before: allRemoved(i + 1, siblings!.length), after: allRemoved(0, i) }
 }
 
 // JS/TS scope boundaries — the structural notion behind `closestScope` (no resolver needed).

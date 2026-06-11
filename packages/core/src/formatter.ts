@@ -103,9 +103,11 @@ export class Formatter {
     this.#collector.remove(lineStart, start) // leading indent — may be already gone under a prior edit
     const lineBreakEnd = newline === -1 ? this.#source.length : newline + 1
     this.#collector.remove(end, lineBreakEnd) // trailing line break
+    // Collapse a blank-line separator the removal leaves dangling against a container edge: `before`
+    // the run above the node (against the close), `after` the run below (against the open). With no
+    // such run each helper returns the offset it was given, so the remove is a no-op.
     if (collapse.before) this.#collector.remove(blankRunStart(this.#source, lineStart), lineStart)
-    // The trailing line break is gone, so the blank lines that followed start at `lineBreakEnd`.
-    if (collapse.after && newline !== -1) this.#collector.remove(lineBreakEnd, blankRunEnd(this.#source, lineBreakEnd))
+    if (collapse.after) this.#collector.remove(lineBreakEnd, blankRunEnd(this.#source, lineBreakEnd))
   }
 
   /** Delete `[start, end)` where `end` begins a following node, collapsing the lines before it: when
