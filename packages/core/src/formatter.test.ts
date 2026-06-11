@@ -59,6 +59,53 @@ describe('Formatter — removal collapse', () => {
     expect(collector.toString()).toBe('c')
   })
 
+  it('removeNode collapses a preceding blank-line run with collapse.before', () => {
+    // `b` is the last element and a blank line precedes it; collapse.before takes that blank too,
+    // so nothing is left dangling. With no flags the blank stays.
+    const src = 'a\n\n  b\nc'
+    const on = setup(src)
+    on.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1, { before: true })
+    expect(on.collector.toString()).toBe('a\nc')
+    const off = setup(src)
+    off.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1)
+    expect(off.collector.toString()).toBe('a\n\nc')
+  })
+
+  it('removeNode collapses a following blank-line run with collapse.after', () => {
+    // The mirror: `b` is the first element and a blank line follows it; collapse.after takes that
+    // blank too, so nothing dangles after the open. With no flags the blank stays.
+    const src = 'a\n  b\n\nc'
+    const on = setup(src)
+    on.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1, { after: true })
+    expect(on.collector.toString()).toBe('a\nc')
+    const off = setup(src)
+    off.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1)
+    expect(off.collector.toString()).toBe('a\n\nc')
+  })
+
+  it('flush dedents the continuation lines of a deferred reindent, skipping blank lines', () => {
+    // The first line is left for the wrapper's indent to govern; later lines lose `dedent` columns,
+    // and a blank line is untouched.
+    const src = '  a;\n\n    b;\n    c;'
+    const { collector, f } = setup(src)
+    f.deferReindent(0, src.length, 2)
+    f.flush()
+    expect(collector.toString()).toBe('  a;\n\n  b;\n  c;')
+  })
+
+  it('deferReindent is a no-op until flush, and ignores a non-positive dedent', () => {
+    const src = 'x;\n    y;'
+    const pending = setup(src)
+    pending.f.deferReindent(0, src.length, 2)
+    expect(pending.collector.toString()).toBe(src) // nothing applied before flush
+    pending.f.flush()
+    expect(pending.collector.toString()).toBe('x;\n  y;')
+    const zero = setup(src)
+    zero.f.deferReindent(0, src.length, 0)
+    zero.f.flush()
+    expect(zero.collector.toString()).toBe(src) // dedent ≤ 0 changes nothing
+  })
+
   it('removeLeadingTo collapses the leading lines but keeps the node line', () => {
     // Drop the directive line and the comment stacked under it; `const`'s own line is untouched.
     const src = '//# x\n// y\nconst a'

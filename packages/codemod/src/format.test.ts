@@ -191,6 +191,57 @@ describe('transform — formatting', () => {
     expect(out).toBe('cfg(\n);')
   })
 
+  it('collapses a blank line that preceded a removed last element (no dangling blank before `}`)', async () => {
+    // `b` is the last key and a blank line separated it from `a`; removing it would leave that blank
+    // dangling before `}`. It collapses, the way Prettier strips a blank line before a closing brace.
+    const out = await apply(
+      (root) => root.find('pair').filter((p) => p.field('key').text === 'b').remove({ separator: true }),
+      'const config = {\n  a: 1,\n\n  b: 2,\n};',
+    )
+    expect(out).toBe('const config = {\n  a: 1,\n};')
+  })
+
+  it('keeps a blank line that becomes an interior separator after removing a middle element', async () => {
+    // The blank separated `a` from `b`; removing `b` (a survivor, `c`, follows) leaves the blank as
+    // an `a`/`c` separator — Prettier preserves a single interior blank line, so it must not collapse.
+    const out = await apply(
+      (root) => root.find('pair').filter((p) => p.field('key').text === 'b').remove({ separator: true }),
+      'const config = {\n  a: 1,\n\n  b: 2,\n  c: 3,\n};',
+    )
+    expect(out).toBe('const config = {\n  a: 1,\n\n  c: 3,\n};')
+  })
+
+  it('collapses the blank line before the first of several trailing elements removed together', async () => {
+    // Removing the last keys in one pass (Bati gating off trailing props): the blank before the first
+    // removed key now precedes `}`, so it collapses — the whole selection counts as "last surviving".
+    const out = await apply(
+      (root) => root.find('pair').filter((p) => ['b', 'c'].includes(p.field('key').text)).remove({ separator: true }),
+      'const config = {\n  a: 1,\n\n  b: 2,\n  c: 3,\n};',
+    )
+    expect(out).toBe('const config = {\n  a: 1,\n};')
+  })
+
+  it('collapses a blank line that followed a removed first element (no dangling blank after `{`)', async () => {
+    // The mirror of the last-element case: `a` is the first key and a blank line followed it, so
+    // removing it would leave that blank dangling after `{`. It collapses, as Prettier strips a blank
+    // line after an opening brace.
+    const out = await apply(
+      (root) => root.find('pair').filter((p) => p.field('key').text === 'a').remove({ separator: true }),
+      'const config = {\n  a: 1,\n\n  b: 2,\n};',
+    )
+    expect(out).toBe('const config = {\n  b: 2,\n};')
+  })
+
+  it('keeps a blank line that becomes an interior separator after removing a non-first element', async () => {
+    // `b` is a middle element with a blank after it; `a` survives before it, so the blank becomes an
+    // `a`/`c` separator (not a dangling blank after the open) and is preserved.
+    const out = await apply(
+      (root) => root.find('pair').filter((p) => p.field('key').text === 'b').remove({ separator: true }),
+      'const config = {\n  a: 1,\n  b: 2,\n\n  c: 3,\n};',
+    )
+    expect(out).toBe('const config = {\n  a: 1,\n\n  c: 3,\n};')
+  })
+
   it('cleans the residual space of an inline element removed under format (does not eat siblings)', async () => {
     // The element and its comma go, plus the one separating space, so no double space is left — and
     // the inline sibling `3` survives (whole-line collapse must not fire here).
@@ -226,14 +277,15 @@ describe('transform — formatting', () => {
   it('removes a node inside an unwrapped block under format (the two deletes compose)', async () => {
     // `unwrap` deletes the wrapper up to the kept body's first node, including that node's indent; a
     // following `remove` of that node abuts the unwrap delete and still lands (it must not be rejected
-    // for overlapping the already-gone indent).
+    // for overlapping the already-gone indent). The surviving `keep()` is dedented to the wrapper's
+    // level (the deferred unwrap reindent yields to the explicit `remove`, so only it is dedented).
     const out = await apply((root) => {
       const ifst = root.find('if_statement').first()
       const stmts = ifst.field('consequence').children()
       ifst.unwrap(stmts)
       stmts.first().remove()
     }, 'if (a) {\n  drop();\n  keep();\n}')
-    expect(out).toBe('  keep();')
+    expect(out).toBe('keep();')
   })
 
   it('drops a directive and the comments stacked under it, up to the node, under format', async () => {
@@ -249,6 +301,8 @@ describe('transform — formatting', () => {
   it('collapses nested conditionals in one pass under format (unwrap then remove inside)', async () => {
     // Bati's one-pass collapse: unwrap a kept block, then descend and remove a dropped sibling inside
     // it. The inner remove must compose with the outer unwrap rather than be rejected for abutting it.
+    // The surviving `no()` is dedented to the (column-0) wrapper's level — the outer unwrap's deferred
+    // reindent dedents it, while the lines of the removed inner `if` yield to that explicit remove.
     const collapse = defineCodemod<Record<string, boolean>>({ namespace: '$$' }, (root, ctx) => {
       root.find('if_statement').forEach((node) => {
         const cond = node.field('condition')
@@ -258,7 +312,18 @@ describe('transform — formatting', () => {
       })
     })
     const t = await collapse.forTarget('tsx')
-    expect(t.transform('if ($$.a) {\n  if ($$.b) {\n    yes();\n  }\n  no();\n}', { a: true, b: false })).toBe('  no();')
+    expect(t.transform('if ($$.a) {\n  if ($$.b) {\n    yes();\n  }\n  no();\n}', { a: true, b: false })).toBe('no();')
+  })
+
+  it('dedents every statement of an unwrapped multi-statement block, not just the first', async () => {
+    // Unwrapping a branch lifts all its statements one level out. The first inherits the wrapper's
+    // indent for free, but the rest must be dedented to match — they kept their deeper source indent.
+    // The interior blank line is preserved (it indents to nothing).
+    const out = await apply((root) => {
+      const ifStmt = root.find('if_statement').first()
+      ifStmt.unwrap(ifStmt.field('consequence').children())
+    }, 'function f() {\n  if (cond) {\n    const x = 1;\n\n    return x;\n  }\n}')
+    expect(out).toBe('function f() {\n  const x = 1;\n\n  return x;\n}')
   })
 
   it('collapses the line of a leading comment emptied via mapLeadingComment under format', async () => {

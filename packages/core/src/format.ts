@@ -113,19 +113,41 @@ export function isHSpace(char: string | undefined): boolean {
   return char === ' ' || char === '\t'
 }
 
+/** The start of the run of whole blank lines immediately above the line beginning at `lineStart`
+ *  — `lineStart` itself when the preceding line is non-blank. The "absorb blank lines above" step
+ *  shared by whole-line removal and the line-collapse of a removed last element. */
+export function blankRunStart(source: string, lineStart: number): number {
+  let from = lineStart
+  while (from > 0) {
+    const prevStart = lineStartOf(source, from - 1)
+    if (source.slice(prevStart, from - 1).trim() !== '') break // a non-blank line stops it
+    from = prevStart
+  }
+  return from
+}
+
+/** The end of the run of whole blank lines beginning at line start `from` — the start of the first
+ *  non-blank line at or after it (`from` itself when that line is non-blank, the source length when
+ *  only blank lines remain). The forward mirror of {@link blankRunStart}: collapsing the blank lines
+ *  that followed a removed first element, which would dangle after the container's opening delimiter. */
+export function blankRunEnd(source: string, from: number): number {
+  let to = from
+  while (to < source.length) {
+    const newline = source.indexOf('\n', to)
+    const lineEnd = newline === -1 ? source.length : newline
+    if (source.slice(to, lineEnd).trim() !== '') break // a non-blank line stops it
+    to = newline === -1 ? source.length : newline + 1
+  }
+  return to
+}
+
 /** The whole-line span `[from, to)` covering the lines `[start, end)` touches — from the start of
  *  `start`'s line (leading indentation included) through the newline after `end`'s line, so nothing
  *  blank is left behind. With `collapseBlankBefore`, also absorb whole blank lines immediately above
  *  (a separator before a dropped block). */
 export function wholeLineRange(source: string, start: number, end: number, collapseBlankBefore = false): [number, number] {
-  let from = lineStartOf(source, start)
-  if (collapseBlankBefore) {
-    while (from > 0) {
-      const prevStart = lineStartOf(source, from - 1)
-      if (source.slice(prevStart, from - 1).trim() !== '') break // a non-blank line stops it
-      from = prevStart
-    }
-  }
+  const lineStart = lineStartOf(source, start)
+  const from = collapseBlankBefore ? blankRunStart(source, lineStart) : lineStart
   const newline = source.indexOf('\n', end)
   return [from, newline === -1 ? source.length : newline + 1]
 }
