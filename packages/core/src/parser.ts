@@ -11,13 +11,18 @@ import { assert } from './assert.js'
 const require = createRequire(import.meta.url)
 
 /**
- * The typescript/tsx grammars are **vendored** here (resolved relative to this module): the npm
- * `tree-sitter-typescript` ships an ABI-14 wasm, which web-tree-sitter loads without supertype
- * metadata (so `find` can't expand `expression` etc.). We ship an ABI-15 rebuild — see
- * `scripts/regen-ts-wasm.sh` — so they impose no peer dependency.
+ * The whole JS/TS/TSX family parses with the **tsx** grammar at runtime: it is a superset (plain JS,
+ * JSX, and every TS form — generics, generic arrows, `as`-casts, `satisfies`), the lone exception
+ * being the JSX-ambiguous angle-bracket cast `<T>x`, which modern code writes `x as T`. The
+ * `javascript`/`typescript` {@link GrammarId}s survive only in the compile-time node-type unions
+ * (narrower `find`/`type` typings); {@link runtimeGrammar} routes them here.
+ *
+ * tsx is **vendored** (resolved relative to this module): npm `tree-sitter-typescript` ships an
+ * ABI-14 wasm that web-tree-sitter loads without supertype metadata (so `find` can't expand
+ * `expression` etc.); we ship an ABI-15 rebuild — see `scripts/regen-ts-wasm.sh` — so it imposes no
+ * peer dependency.
  */
 const VENDORED_WASM: Partial<Record<GrammarId, string>> = {
-  typescript: 'tree-sitter-typescript.wasm',
   tsx: 'tree-sitter-tsx.wasm',
   // tree-sitter-yaml ships no prebuilt wasm on the bare `tree-sitter-yaml` package; we vendor the
   // one from `@tree-sitter-grammars/tree-sitter-yaml` so YAML imposes no peer dependency.
@@ -30,9 +35,15 @@ const VENDORED_WASM: Partial<Record<GrammarId, string>> = {
  * package becomes an actionable error in `resolveBuiltinWasm`.
  */
 const PEER_WASM: Partial<Record<GrammarId, string>> = {
-  javascript: 'tree-sitter-javascript/tree-sitter-javascript.wasm',
   html: 'tree-sitter-html/tree-sitter-html.wasm',
   css: 'tree-sitter-css/tree-sitter-css.wasm',
+}
+
+/** The grammar a {@link GrammarId} is parsed with at runtime — the JS/TS/TSX family shares the tsx
+ *  superset (see {@link VENDORED_WASM}), every other id is itself. So `javascript`/`typescript` never
+ *  load a grammar of their own; they fold onto the single tsx language. */
+function runtimeGrammar(id: GrammarId | string): GrammarId | string {
+  return id === 'javascript' || id === 'typescript' ? 'tsx' : id
 }
 
 let initPromise: Promise<void> | null = null
@@ -48,18 +59,19 @@ async function init(): Promise<void> {
 }
 
 /**
- * Lazily load a grammar, idempotent per `id`. Built-in {@link GrammarId}s resolve
- * their own `.wasm`; an external grammar (e.g. a {@link ZoneSplitter}'s shell
- * grammar) passes its `wasmPath` and an arbitrary `id` used as the cache key.
+ * Lazily load a grammar, idempotent. The JS/TS/TSX family folds onto the tsx grammar
+ * ({@link runtimeGrammar}); every other built-in {@link GrammarId} resolves its own `.wasm`, and an
+ * external grammar (e.g. a {@link ZoneSplitter}'s shell) passes its `wasmPath` under an arbitrary `id`.
  */
 async function loadGrammar(id: GrammarId | string, wasmPath?: string): Promise<void> {
-  if (languages.has(id)) return
-  let pending = loads.get(id)
+  const key = runtimeGrammar(id)
+  if (languages.has(key)) return
+  let pending = loads.get(key)
   if (!pending) {
-    pending = loadLanguage(id, wasmPath)
-    loads.set(id, pending)
+    pending = loadLanguage(key, wasmPath)
+    loads.set(key, pending)
   }
-  languages.set(id, await pending)
+  languages.set(key, await pending)
 }
 
 async function loadLanguage(id: string, wasmPath?: string): Promise<Language> {
@@ -84,7 +96,7 @@ function resolveBuiltinWasm(id: string): string {
 /** Parse `source` with an already-loaded grammar. Reuses one parser instance; safe
  *  because transforms run synchronously and trees are independent of the parser. */
 function parse(source: string, id: GrammarId | string): Tree {
-  const language = languages.get(id)
+  const language = languages.get(runtimeGrammar(id))
   assert(language, `grammar '${id}' not loaded; call loadGrammar('${id}') first`)
   parser ??= new TreeSitter()
   parser.setLanguage(language)
@@ -98,10 +110,11 @@ function parse(source: string, id: GrammarId | string): Tree {
  *  names are kept too — harmless, since only concrete types appear in a tree. Memoised per grammar,
  *  so a `find` can call it per node. */
 function subtypesOf(id: GrammarId | string, typeName: string): string[] {
-  const language = languages.get(id)
+  const key = runtimeGrammar(id)
+  const language = languages.get(key)
   assert(language, `grammar '${id}' not loaded; call loadGrammar('${id}') first`)
-  let perGrammar = subtypeCache.get(id)
-  if (!perGrammar) subtypeCache.set(id, (perGrammar = new Map()))
+  let perGrammar = subtypeCache.get(key)
+  if (!perGrammar) subtypeCache.set(key, (perGrammar = new Map()))
   let names = perGrammar.get(typeName)
   if (!names) {
     const supertypes = new Set(language.supertypes)
