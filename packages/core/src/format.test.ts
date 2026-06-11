@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { detectStyle, reindent, lineStartOf, indentOf, isHSpace, wholeLineRange } from './format.js'
+import { detectStyle, reindent, lineStartOf, indentOf, isHSpace, wholeLineRange, blankRunStart } from './format.js'
 
 describe('detectStyle', () => {
   it('detects a two-space indent', () => {
@@ -69,6 +69,20 @@ describe('line queries', () => {
     expect(isHSpace('\t')).toBe(true)
     expect(isHSpace('\n')).toBe(false)
     expect(isHSpace(undefined)).toBe(false)
+  })
+})
+
+describe('blankRunStart', () => {
+  it('walks back over a run of blank lines above the line', () => {
+    const src = 'a\n\n\n  b\nc'
+    const bStart = lineStartOf(src, src.indexOf('b'))
+    expect(blankRunStart(src, bStart)).toBe(2) // the first of the two blank lines
+  })
+
+  it('returns the line start unchanged when the line above is non-blank', () => {
+    const src = 'a\n  b\nc'
+    const bStart = lineStartOf(src, src.indexOf('b'))
+    expect(blankRunStart(src, bStart)).toBe(bStart)
   })
 })
 

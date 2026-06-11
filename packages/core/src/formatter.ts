@@ -1,6 +1,6 @@
 import type { RichNode } from './types.js'
 import type { EditCollector } from './edit-collector.js'
-import { type FormatStyle, reindent, indentOf, isHSpace, lineStartOf, wholeLineRange } from './format.js'
+import { type FormatStyle, reindent, indentOf, isHSpace, lineStartOf, wholeLineRange, blankRunStart } from './format.js'
 import { openDelimiter, trailingSeparator, isMultiline, NEWLINE_CONTAINERS, SEMI_CONTAINERS } from './containers.js'
 
 /**
@@ -17,6 +17,9 @@ export class Formatter {
   readonly #collector: EditCollector
   readonly #source: string
   readonly #style: FormatStyle
+  /** Reindents deferred to {@link flush} — registered by `unwrap`, applied after the codemod's
+   *  explicit edits so they yield to them (see {@link deferReindent}). */
+  readonly #deferred: Array<{ from: number; to: number; dedent: number }> = []
 
   constructor(collector: EditCollector, source: string, style: FormatStyle) {
     this.#collector = collector
@@ -78,8 +81,12 @@ export class Formatter {
    *  separately so the deletion composes after an abutting edit: a prior `unwrap`/`dropDirective` that
    *  already consumed the run up to `start` leaves the content abutting it (no overlap, so it lands),
    *  while the leading-indent removal it overlaps is dropped on its own (first-wins) instead of taking
-   *  the whole line removal down with it. */
-  removeNode(start: number, end: number): void {
+   *  the whole line removal down with it.
+   *
+   *  With `collapseBlankBefore` (the node was the last surviving element of its container), the run
+   *  of blank lines directly above is removed too: it would otherwise be left dangling before the
+   *  container's closing delimiter, the way Prettier strips a blank line before a `}`. */
+  removeNode(start: number, end: number, collapseBlankBefore = false): void {
     const lineStart = lineStartOf(this.#source, start)
     const newline = this.#source.indexOf('\n', end)
     const lineEnd = newline === -1 ? this.#source.length : newline
@@ -94,6 +101,9 @@ export class Formatter {
     this.#collector.remove(start, end) // the content — abuts any prior edit at `start`, so it lands
     this.#collector.remove(lineStart, start) // leading indent — may be already gone under a prior edit
     this.#collector.remove(end, newline === -1 ? this.#source.length : newline + 1) // trailing line break
+    // A preceding blank-line separator now sits against the container's close — collapse it. Its own
+    // edit (abutting the leading-indent removal, no overlap) so a prior edit on the line is unaffected.
+    if (collapseBlankBefore) this.#collector.remove(blankRunStart(this.#source, lineStart), lineStart)
   }
 
   /** Delete `[start, end)` where `end` begins a following node, collapsing the lines before it: when
@@ -118,7 +128,39 @@ export class Formatter {
     this.#collector.remove(from, to)
   }
 
+  // —— unwrap reindent (deferred) ——
+
+  /** Register a dedent of the lifted range `[from, to)` by `dedent` columns: every continuation line
+   *  (the lines after the first) loses up to `dedent` leading-whitespace columns. Used by `unwrap`,
+   *  whose kept statements drop a level — their first line inherits the wrapper's indent for free,
+   *  but the rest keep their deeper source indent.
+   *
+   *  Deferred to {@link flush} rather than applied now so it yields (first-wins) to the codemod's own
+   *  edits on the kept nodes: a kept statement removed or replaced in the same pass wins the overlap,
+   *  so only lines that actually survive get dedented. A no-op unless `dedent` is positive. */
+  deferReindent(from: number, to: number, dedent: number): void {
+    if (dedent > 0) this.#deferred.push({ from, to, dedent })
+  }
+
+  /** Apply every {@link deferReindent}, once, after the codemod has recorded its explicit edits. */
+  flush(): void {
+    for (const { from, to, dedent } of this.#deferred) this.#dedentLifted(from, to, dedent)
+    this.#deferred.length = 0
+  }
+
   // —— internals ——
+
+  /** Strip up to `dedent` leading-whitespace columns from each continuation line of `[from, to)`
+   *  (blank lines skipped). Whitespace-only edits at line starts, so they compose with edits to the
+   *  kept nodes' content; a line already consumed by another edit drops out via first-wins. */
+  #dedentLifted(from: number, to: number, dedent: number): void {
+    for (let nl = this.#source.indexOf('\n', from); nl !== -1 && nl < to; nl = this.#source.indexOf('\n', nl + 1)) {
+      const lineStart = nl + 1
+      let i = lineStart
+      while (isHSpace(this.#source[i])) i++
+      if (i > lineStart) this.#collector.remove(lineStart, lineStart + Math.min(dedent, i - lineStart))
+    }
+  }
 
   /** `text` as a fresh line at the indentation of the sibling at `index`. */
   #line(text: string, index: number): string {

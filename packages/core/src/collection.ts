@@ -273,6 +273,7 @@ export class Collection<G extends GrammarId = GrammarId> {
    * whole-line removal where the codemod can't opt in per node (and for `collapseBlankBefore`).
    */
   remove(options?: { separator?: boolean; wholeLines?: boolean; collapseBlankBefore?: boolean }): this {
+    const removing = new Set(this.#nodes)
     for (const node of this.#nodes) {
       if (options?.wholeLines) {
         this.#session.formatter.removeWholeLines(node.documentStartIndex, node.documentEndIndex, options.collapseBlankBefore)
@@ -283,8 +284,10 @@ export class Collection<G extends GrammarId = GrammarId> {
         const comma = trailingSeparator(node)
         if (comma) end = comma.documentEndIndex
       }
-      // Collapse the line when the node owned it, the way Prettier would have.
-      this.#session.formatter.removeNode(node.documentStartIndex, end)
+      // Collapse the line when the node owned it, the way Prettier would have. When the node is the
+      // last surviving element of its container, also collapse a blank line that preceded it, which
+      // would otherwise dangle before the closing delimiter.
+      this.#session.formatter.removeNode(node.documentStartIndex, end, isLastSurviving(node, removing))
     }
     return this
   }
@@ -303,8 +306,16 @@ export class Collection<G extends GrammarId = GrammarId> {
       this.#session.collector.remove(wrapper.documentStartIndex, wrapper.documentEndIndex)
       return this
     }
-    this.#session.collector.remove(wrapper.documentStartIndex, kept[0].documentStartIndex)
-    this.#session.collector.remove(kept[kept.length - 1].documentEndIndex, wrapper.documentEndIndex)
+    const first = kept[0]
+    const last = kept[kept.length - 1]
+    this.#session.collector.remove(wrapper.documentStartIndex, first.documentStartIndex)
+    this.#session.collector.remove(last.documentEndIndex, wrapper.documentEndIndex)
+    // The kept statements drop a level: the delete above lets the first line inherit the wrapper's
+    // indent, but the continuation lines keep their deeper source indent — dedent them to match.
+    // Deferred so edits to the kept nodes in the same pass (an inner conditional collapsed away) win.
+    const formatter = this.#session.formatter
+    const dedent = formatter.indentAt(first.documentStartIndex).length - formatter.indentAt(wrapper.documentStartIndex).length
+    formatter.deferReindent(first.documentStartIndex, last.documentEndIndex, dedent)
     return this
   }
 
@@ -543,6 +554,17 @@ function siblingAt(node: RichNode, delta: number): RichNode | null {
   return i === -1 ? null : (siblings![i + delta] ?? null)
 }
 
+/** Whether `node` is the last child of its container once every node in `removing` is gone — i.e.
+ *  every following named sibling is itself being removed. Such a node's preceding blank line would
+ *  dangle before the container's close, so its removal collapses it. */
+function isLastSurviving(node: RichNode, removing: Set<RichNode>): boolean {
+  const siblings = node.parent?.children
+  const i = siblings?.indexOf(node) ?? -1
+  if (i === -1) return false
+  for (let j = i + 1; j < siblings!.length; j++) if (!removing.has(siblings![j])) return false
+  return true
+}
+
 // JS/TS scope boundaries — the structural notion behind `closestScope` (no resolver needed).
 const SCOPE_NODES = new Set([
   'program',
@@ -626,6 +648,7 @@ export function createCodemodTransformer<
         },
       }
       codemod(new Collection<G>(zones.map((zone) => zone.tree), session), context)
+      formatter.flush() // apply deferred reindents (unwrap), now that explicit edits have won overlaps
       return collector
     }
 
