@@ -1,7 +1,9 @@
 // The contract every other file in @codegraft/core (and the @codegraft/codemod / @codegraft/cli
-// packages downstream) implements against. The only import is the generated, leaf node-type
-// module (it imports nothing back, so this stays the near-root of the type graph).
+// packages downstream) implements against. Its only imports are leaf modules that import nothing
+// back (the generated node-type module and the format options), so this stays near the root of the
+// type graph.
 import type { NodeTypeAll, FieldName } from './generated/node-types.js'
+import type { FormatOptions } from './format.js'
 
 /** A real tree-sitter grammar. There is no id for SFC file formats — those are
  *  handled by a {@link ZoneSplitter}, which maps each section to one of these. */
@@ -96,10 +98,17 @@ export interface SourceMap {
  * and is constrained to a record so it can flow into the body and `transform(src, ctx)`.
  */
 export interface Transformer<Ctx extends Record<string, unknown> = Record<string, unknown>> {
-  transform(source: string, context: Ctx): string
-  /** Like {@link transform} but also returns a source map (`options.source` names the
-   *  input in the map). Used by build-pipeline integrations such as `@codegraft/unplugin`. */
-  transformWithMap(source: string, context: Ctx, options?: { source?: string }): { code: string; map: SourceMap }
+  /** Apply the codemod to `source`. The recorded edits are always rendered indentation-aware —
+   *  inserts re-indented to the file's unit/EOL, a removed node's line collapsed — keyed off the
+   *  source's detected style; `options` overrides that detection per apply (see {@link FormatOptions}). */
+  transform(source: string, context: Ctx, options?: FormatOptions): string
+  /** Like {@link transform} but also returns a source map (`options.source` names the input in the
+   *  map). Used by build-pipeline integrations such as `@codegraft/unplugin`. */
+  transformWithMap(
+    source: string,
+    context: Ctx,
+    options?: { source?: string } & FormatOptions,
+  ): { code: string; map: SourceMap }
 }
 
 /** A {@link Transformer} that has not yet loaded its WASM grammars. */

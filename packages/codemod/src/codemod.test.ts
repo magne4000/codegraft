@@ -38,7 +38,7 @@ describe('defineCodemod — query + edits', () => {
         node.remove()
       })
     }).forTarget('tsx')
-    expect(t.transform('a()\ndebugger\nb()', {})).toBe('a()\n\nb()')
+    expect(t.transform('a()\ndebugger\nb()', {})).toBe('a()\nb()')
   })
 
   it('size() supports idempotency checks', async () => {
@@ -72,7 +72,7 @@ describe('defineCodemod — query + edits', () => {
     const t = await defineCodemod((root) => {
       root.findComments(/\$\$/).remove()
     }).forTarget('css')
-    expect(t.transform('/* $$.marker */\na { color: red }', {})).toBe('\na { color: red }')
+    expect(t.transform('/* $$.marker */\na { color: red }', {})).toBe('a { color: red }')
   })
 
   it('remove({ wholeLines }) deletes the whole line, leaving none blank', async () => {
