@@ -13,7 +13,7 @@ import { attachComments, isComment } from './comment-attachment.js'
 import { EditCollector } from './edit-collector.js'
 import { evaluate as evaluateNode } from './evaluate.js'
 import { createResolver, type Resolver } from './resolver.js'
-import { detectStyle } from './format.js'
+import { detectEol } from './format.js'
 import { Formatter } from './formatter.js'
 import { trailingSeparator, NEWLINE_CONTAINERS } from './containers.js'
 import { assert } from './assert.js'
@@ -597,7 +597,7 @@ export function createCodemodTransformer<
       for (const zone of zones) attachComments(zone.tree)
       // Inserted snippets adopt the source's EOL (detected once); their indentation comes from the
       // anchor line.
-      const formatter = new Formatter(collector, source, detectStyle(source))
+      const formatter = new Formatter(collector, source, detectEol(source))
       // One resolver per zone tree, built on first use (only if the codemod asks for scope).
       const resolvers = new Map<RichNode, Resolver | null>()
       const session: Session = {

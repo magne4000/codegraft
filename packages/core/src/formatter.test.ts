@@ -1,12 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { EditCollector } from './edit-collector.js'
 import { Formatter } from './formatter.js'
-import type { FormatStyle } from './format.js'
 
-const STYLE: FormatStyle = { eol: '\n' }
-const setup = (src: string, style: FormatStyle = STYLE) => {
+const setup = (src: string, eol = '\n') => {
   const collector = new EditCollector(src)
-  return { collector, f: new Formatter(collector, src, style) }
+  return { collector, f: new Formatter(collector, src, eol) }
 }
 
 // append/prepend operate on parsed container nodes, so they're exercised at the codemod level

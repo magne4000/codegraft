@@ -1,17 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { detectStyle, reindent, lineStartOf, indentOf } from './format.js'
+import { detectEol, reindent, indentOf } from './format.js'
 
-describe('detectStyle', () => {
+describe('detectEol', () => {
   it('detects an LF line ending', () => {
-    expect(detectStyle('a\nb').eol).toBe('\n')
+    expect(detectEol('a\nb')).toBe('\n')
   })
 
   it('detects a CRLF line ending', () => {
-    expect(detectStyle('a\r\nb\r\nc').eol).toBe('\r\n')
+    expect(detectEol('a\r\nb\r\nc')).toBe('\r\n')
   })
 
   it('defaults to LF with no line break to learn from', () => {
-    expect(detectStyle('abc').eol).toBe('\n')
+    expect(detectEol('abc')).toBe('\n')
   })
 })
 
@@ -40,15 +40,10 @@ describe('reindent', () => {
   })
 })
 
-describe('line queries', () => {
-  it('lineStartOf finds the start of the line containing an index', () => {
-    const src = 'ab\n  cd\nef'
-    expect(lineStartOf(src, 0)).toBe(0)
-    expect(lineStartOf(src, src.indexOf('cd'))).toBe(3) // after the first '\n'
-  })
-
-  it('indentOf reports the leading whitespace of the line', () => {
+describe('indentOf', () => {
+  it('reports the leading whitespace of the line containing an index', () => {
     expect(indentOf('a\n    b', 'a\n    b'.indexOf('b'))).toBe('    ')
     expect(indentOf('foo', 0)).toBe('')
+    expect(indentOf('ab\n  cd\nef', 'ab\n  cd\nef'.indexOf('cd'))).toBe('  ') // mid-file line
   })
 })

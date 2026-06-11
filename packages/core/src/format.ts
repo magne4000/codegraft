@@ -1,16 +1,10 @@
 // Re-indenting inserted code. Codegraft edits byte ranges, so code it doesn't touch keeps its
-// formatting for free; this re-anchors an *inserted* snippet to the file's indent and line ending
-// instead of landing at column 0. Cosmetic clean-up beyond that is left to a downstream formatter.
+// formatting for free; this re-anchors an *inserted* snippet to its anchor line's indent and the
+// file's line ending instead of landing at column 0. Cosmetics beyond that are a downstream formatter's.
 
-/** A source file's resolved formatting. Only the line ending matters — an insert's indentation is
- *  taken from its anchor line, not a detected unit. */
-export interface FormatStyle {
-  eol: string
-}
-
-/** Guess the EOL (first line break) of `source`, defaulting to `'\n'`. */
-export function detectStyle(source: string): FormatStyle {
-  return { eol: /\r\n|\n/.exec(source)?.[0] ?? '\n' }
+/** Guess a source's EOL — its first line break — defaulting to `'\n'`. */
+export function detectEol(source: string): string {
+  return /\r\n|\n/.exec(source)?.[0] ?? '\n'
 }
 
 /** Re-indent a snippet for a line indented by `baseIndent`: the first line is left for the caller
@@ -33,13 +27,9 @@ export function reindent(text: string, baseIndent: string, eol: string): string 
   return lines.map((line, i) => (i === 0 || line.trim() === '' ? line : baseIndent + line.slice(base))).join(eol)
 }
 
-/** Offset of the first character of the line containing `index`. */
-export function lineStartOf(source: string, index: number): number {
-  return source.lastIndexOf('\n', index - 1) + 1
-}
-
 /** The leading whitespace of the line containing `index` — the base indent an inserted snippet should
  *  match. Empty when the line starts with a non-whitespace character. */
 export function indentOf(source: string, index: number): string {
-  return /^[ \t]*/.exec(source.slice(lineStartOf(source, index), index))![0]
+  const lineStart = source.lastIndexOf('\n', index - 1) + 1
+  return /^[ \t]*/.exec(source.slice(lineStart, index))![0]
 }
