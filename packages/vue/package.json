@@ -31,17 +31,5 @@
   },
   "dependencies": {
     "@codegraft/core": "workspace:*"
-  },
-  "peerDependencies": {
-    "tree-sitter-css": "^0.25.0",
-    "tree-sitter-html": "^0.23.0"
-  },
-  "peerDependenciesMeta": {
-    "tree-sitter-css": {
-      "optional": true
-    },
-    "tree-sitter-html": {
-      "optional": true
-    }
   }
 }

@@ -97,12 +97,6 @@ importers:
       '@codegraft/core':
         specifier: workspace:*
         version: link:../core
-      tree-sitter-css:
-        specifier: ^0.25.0
-        version: 0.25.0
-      tree-sitter-html:
-        specifier: ^0.23.0
-        version: 0.23.2
 
 packages:
 

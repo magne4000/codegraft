@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { Language, Parser as TreeSitter } from 'web-tree-sitter'
@@ -6,42 +5,30 @@ import type { Tree } from 'web-tree-sitter'
 import type { GrammarId } from './types.js'
 import { assert } from './assert.js'
 
-// web-tree-sitter resolves the grammar `.wasm` from its npm package at runtime; the
-// engine wasm (`tree-sitter.wasm`) is self-located by `Parser.init()`.
-const require = createRequire(import.meta.url)
-
 /**
- * The whole JS/TS/TSX family parses with the **tsx** grammar at runtime: it is a superset (plain JS,
- * JSX, and every TS form — generics, generic arrows, `as`-casts, `satisfies`), the lone exception
- * being the JSX-ambiguous angle-bracket cast `<T>x`, which modern code writes `x as T`. The
- * `javascript`/`typescript` {@link GrammarId}s survive only in the compile-time node-type unions
- * (narrower `find`/`type` typings); {@link runtimeGrammar} routes them here.
+ * Every built-in grammar ships **vendored** as wasm under `wasm/`, so a consumer of `@codegraft/*`
+ * needs no native `tree-sitter-*` package (no `node-gyp` build, no C++ toolchain). The wasm filename
+ * per {@link GrammarId}; ids absent here (`javascript`/`typescript`) fold onto another via
+ * {@link runtimeGrammar} and never resolve a file of their own.
  *
- * tsx is **vendored** (resolved relative to this module): npm `tree-sitter-typescript` ships an
- * ABI-14 wasm that web-tree-sitter loads without supertype metadata (so `find` can't expand
- * `expression` etc.); we ship an ABI-15 rebuild — see `scripts/regen-ts-wasm.sh` — so it imposes no
- * peer dependency.
+ * Provenance differs by grammar:
+ * - `tsx` — rebuilt from `tree-sitter-typescript`'s grammar source, because its npm wasm is ABI-14
+ *   and loads without the supertype metadata `find('expression')` needs; see `scripts/regen-ts-wasm.sh`.
+ * - `html`/`css` — copied verbatim from their npm packages (already ABI-current with supertypes);
+ *   see `scripts/regen-builtin-wasm.sh`.
+ * - `yaml` — vendored from `@tree-sitter-grammars/tree-sitter-yaml` (the bare package ships no wasm).
  */
 const VENDORED_WASM: Partial<Record<GrammarId, string>> = {
   tsx: 'tree-sitter-tsx.wasm',
-  // tree-sitter-yaml ships no prebuilt wasm on the bare `tree-sitter-yaml` package; we vendor the
-  // one from `@tree-sitter-grammars/tree-sitter-yaml` so YAML imposes no peer dependency.
+  html: 'tree-sitter-html.wasm',
+  css: 'tree-sitter-css.wasm',
   yaml: 'tree-sitter-yaml.wasm',
 }
 
-/**
- * The npm specifier of each remaining built-in grammar's `.wasm` (these already ship the ABI we
- * need). Optional peer dependencies: resolved only when the grammar is requested, and a missing
- * package becomes an actionable error in `resolveBuiltinWasm`.
- */
-const PEER_WASM: Partial<Record<GrammarId, string>> = {
-  html: 'tree-sitter-html/tree-sitter-html.wasm',
-  css: 'tree-sitter-css/tree-sitter-css.wasm',
-}
-
 /** The grammar a {@link GrammarId} is parsed with at runtime — the JS/TS/TSX family shares the tsx
- *  superset (see {@link VENDORED_WASM}), every other id is itself. So `javascript`/`typescript` never
- *  load a grammar of their own; they fold onto the single tsx language. */
+ *  superset (a runtime superset, modulo the JSX-ambiguous angle cast `<T>x` → `x as T`), every other
+ *  id is itself. So `javascript`/`typescript` never load a grammar of their own; they fold onto tsx.
+ *  The distinction survives only in the compile-time node-type unions (narrower `find`/`type`). */
 function runtimeGrammar(id: GrammarId | string): GrammarId | string {
   return id === 'javascript' || id === 'typescript' ? 'tsx' : id
 }
@@ -82,15 +69,8 @@ async function loadLanguage(id: string, wasmPath?: string): Promise<Language> {
 
 function resolveBuiltinWasm(id: string): string {
   const vendored = VENDORED_WASM[id as GrammarId]
-  if (vendored) return fileURLToPath(new URL(`../wasm/${vendored}`, import.meta.url))
-  const spec = PEER_WASM[id as GrammarId]
-  assert(spec, `grammar '${id}' is not built in; a ZoneSplitter must pass its own wasmPath to loadGrammar`)
-  try {
-    return require.resolve(spec)
-  } catch {
-    const pkg = spec.slice(0, spec.indexOf('/'))
-    throw new Error(`[codegraft] grammar '${id}' requires the optional peer '${pkg}'; add it to your dependencies`)
-  }
+  assert(vendored, `grammar '${id}' is not built in; a ZoneSplitter must pass its own wasmPath to loadGrammar`)
+  return fileURLToPath(new URL(`../wasm/${vendored}`, import.meta.url))
 }
 
 /** Parse `source` with an already-loaded grammar. Reuses one parser instance; safe

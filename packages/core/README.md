@@ -9,6 +9,6 @@ with source maps). Compiled Codegraft codemods depend only on this package.
 import { Collection, createCodemodTransformer, evaluate } from '@codegraft/core'
 ```
 
-JavaScript, TypeScript, and TSX all parse with a vendored grammar bundled here (no peer
-dependency); `tree-sitter-html` and `tree-sitter-css` are **optional peer dependencies** —
-install them only if your targets include `.html` / `.css`.
+Every built-in grammar (JS/TS/TSX, HTML, CSS, YAML) is bundled here as vendored wasm — **no native
+`tree-sitter-*` peer dependency**, so installing `@codegraft/*` needs no C++ toolchain or
+`node-gyp` build. A `ZoneSplitter` for an external format still supplies its own grammar wasm.
