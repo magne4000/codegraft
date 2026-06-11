@@ -354,7 +354,7 @@ export class Collection<G extends GrammarId = GrammarId> {
           this.#session.collector.insertRight(last.documentEndIndex, this.#line(text, last.documentStartIndex))
         }
       } else if (elements.length === 0) {
-        this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, text)
+        this.#fillContainer(node, text)
       } else {
         this.#appendElement(node, elements[elements.length - 1], text)
       }
@@ -369,9 +369,10 @@ export class Collection<G extends GrammarId = GrammarId> {
       if (NEWLINE_CONTAINERS.has(node.type)) {
         if (elements.length === 0) this.#fillBlock(node, text)
         else this.#session.collector.insertRight(openDelimiter(node).documentEndIndex, this.#line(text, elements[0].documentStartIndex))
+      } else if (elements.length === 0) {
+        this.#fillContainer(node, text)
       } else {
-        const open = openDelimiter(node).documentEndIndex
-        this.#session.collector.insertRight(open, elements.length === 0 ? text : text + ', ')
+        this.#prependElement(node, elements[0], text)
       }
     }
     return this
@@ -514,7 +515,7 @@ export class Collection<G extends GrammarId = GrammarId> {
       return
     }
     const sep = SEMI_CONTAINERS.has(node.type) ? ';' : ','
-    if (node.startPosition.row === node.endPosition.row) {
+    if (!isMultiline(node)) {
       // Inline container: keep it on one line, separated (and, for `;`, terminated) by `sep`.
       collector.insertRight(last.documentEndIndex, `${sep} ${text}`)
       return
@@ -527,6 +528,35 @@ export class Collection<G extends GrammarId = GrammarId> {
     if (trailing) collector.insertRight(trailing.documentEndIndex, line + sep)
     else if (sep === ';') collector.insertRight(last.documentEndIndex, line)
     else collector.insertRight(last.documentEndIndex, sep + line)
+  }
+
+  /** Prepend `text` before the first element `first` of a delimited container — the mirror of
+   *  {@link #appendElement}. The new element is always followed by the old first, so under `format` a
+   *  multi-line container puts it on a fresh line after the open delimiter, separator-terminated (`;`
+   *  only where the body terminates members with one); an inline one inserts before the first element
+   *  so brace padding stays intact (`{ a }` → `{ x, a }`). Verbatim: the historical inline comma join. */
+  #prependElement(node: RichNode, first: RichNode, text: string): void {
+    const collector = this.#session.collector
+    if (!this.#session.style) {
+      collector.insertRight(openDelimiter(node).documentEndIndex, text + ', ')
+      return
+    }
+    const sep = SEMI_CONTAINERS.has(node.type) ? ';' : ','
+    if (!isMultiline(node)) {
+      collector.insertLeft(first.documentStartIndex, `${text}${sep} `)
+      return
+    }
+    const terminate = sep === ',' || trailingSeparator(first, sep) !== null
+    collector.insertRight(openDelimiter(node).documentEndIndex, this.#line(text, first.documentStartIndex) + (terminate ? sep : ''))
+  }
+
+  /** Insert `text` as the sole element of an empty delimited container. Under `format` a brace
+   *  container is padded (`{}` → `{ text }`); an array / argument list is not (`[]` → `[text]`).
+   *  Verbatim: bare insertion, byte-identical. */
+  #fillContainer(node: RichNode, text: string): void {
+    const open = openDelimiter(node)
+    const pad = this.#session.style && open.text === '{' ? ' ' : ''
+    this.#session.collector.insertRight(open.documentEndIndex, pad + text + pad)
   }
   /** Open an empty `{}` block onto its own indented line — `{}` → `{⏎  text⏎}` — or insert `text`
    *  bare when not formatting. */
@@ -594,6 +624,12 @@ function openDelimiter(node: RichNode): RichNode {
   const open = node.allChildren[0]
   assert(open, `container '${node.type}' has no opening delimiter`)
   return open
+}
+
+/** Whether `node` spans more than one line (its open and close sit on different rows) — the cue for
+ *  `append`/`prepend` to lay an element on its own line rather than inline. */
+function isMultiline(node: RichNode): boolean {
+  return node.startPosition.row !== node.endPosition.row
 }
 
 // Containers whose elements are separated by newlines (a block / class body), not commas.

@@ -63,18 +63,28 @@ describe('EditCollector', () => {
     expect(c.toString()).toBe('a\nc')
   })
 
-  it('removeFormatted leaves an inline hole untouched (delete only the span)', () => {
+  it('removeFormatted leaves an inline hole clean (no line collapse, no double space)', () => {
     const src = '[1, two, 3]'
     const c = new EditCollector(src)
-    c.removeFormatted(src.indexOf('two'), src.indexOf('3')) // `two, ` — an inline span, no line collapse
+    c.removeFormatted(src.indexOf('two'), src.indexOf('two') + 4) // `two,` — the following space is cleaned
     expect(c.toString()).toBe('[1, 3]')
   })
 
-  it('removeFormatted keeps the line when content trails the span', () => {
+  it('removeFormatted clears one separating space, not a list-edge space', () => {
+    // Both sides spaced → one space goes. At a list edge (next char is `]`, not a space) nothing extra.
+    const mid = new EditCollector('[1, two, 3]')
+    mid.removeFormatted(4, 8) // `two,` mid-list → `[1, 3]`
+    expect(mid.toString()).toBe('[1, 3]')
+    const edge = new EditCollector('[two, 3]')
+    edge.removeFormatted(1, 5) // `two,` at the start, preceded by `[` → leading space untouched
+    expect(edge.toString()).toBe('[ 3]')
+  })
+
+  it('removeFormatted keeps the line when content trails the span, clearing one separating space', () => {
     const src = '  drop more\n'
     const c = new EditCollector(src)
-    c.removeFormatted(2, 6) // `drop`, but ` more` trails on the same line
-    expect(c.toString()).toBe('   more\n')
+    c.removeFormatted(2, 6) // `drop`, but ` more` trails on the same line — the line is not collapsed
+    expect(c.toString()).toBe('  more\n')
   })
 
   it('removeFormatted still drops the content after a prior edit took the leading indent', () => {

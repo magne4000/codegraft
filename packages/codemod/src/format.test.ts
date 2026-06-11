@@ -156,6 +156,55 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('interface C { a: A; }', {})).toBe('interface C { a: A; b: B; }')
   })
 
+  it('prepends to a multi-line object on its own line (mirror of append)', async () => {
+    const t = await defineCodemod({ format: true }, (root) => {
+      root.find('object').first().prepend('x: 0')
+    }).forTarget('tsx')
+    expect(t.transform('const a = {\n  a: 1,\n  b: 2,\n};', {})).toBe('const a = {\n  x: 0,\n  a: 1,\n  b: 2,\n};')
+  })
+
+  it('prepends an interface member with a `;` separator, matching the body style', async () => {
+    const semi = await defineCodemod({ format: true }, (root) => {
+      root.find('interface_body').first().prepend('z: Z')
+    }).forTarget('tsx')
+    expect(semi.transform('interface C {\n  a: A;\n}', {})).toBe('interface C {\n  z: Z;\n  a: A;\n}')
+    // a `;`-less body keeps that style — the newline separates, no `;` is introduced.
+    const noSemi = await defineCodemod({ format: true }, (root) => {
+      root.find('interface_body').first().prepend('z: Z')
+    }).forTarget('tsx')
+    expect(noSemi.transform('interface C {\n  a: A\n}', {})).toBe('interface C {\n  z: Z\n  a: A\n}')
+  })
+
+  it('prepends inline before the first element, keeping brace padding (`;`, not `,`)', async () => {
+    const arr = await defineCodemod({ format: true }, (root) => root.find('array').first().prepend('0')).forTarget('tsx')
+    expect(arr.transform('const a = [1, 2]', {})).toBe('const a = [0, 1, 2]')
+    const obj = await defineCodemod({ format: true }, (root) => root.find('object').first().prepend('x: 0')).forTarget('tsx')
+    expect(obj.transform('const a = { a: 1 }', {})).toBe('const a = { x: 0, a: 1 }')
+    const iface = await defineCodemod({ format: true }, (root) =>
+      root.find('interface_body').first().prepend('z: Z'),
+    ).forTarget('tsx')
+    expect(iface.transform('interface C { a: A; }', {})).toBe('interface C { z: Z; a: A; }')
+  })
+
+  it('pads an empty brace container when filling its first element under format', async () => {
+    const obj = await defineCodemod({ format: true }, (root) => root.find('object').first().append('a: 1')).forTarget('tsx')
+    expect(obj.transform('const a = {}', {})).toBe('const a = { a: 1 }')
+    const iface = await defineCodemod({ format: true }, (root) =>
+      root.find('interface_body').first().append('a: A'),
+    ).forTarget('tsx')
+    expect(iface.transform('interface C {}', {})).toBe('interface C { a: A }')
+    // arrays / arg-lists are not padded
+    const arr = await defineCodemod({ format: true }, (root) => root.find('array').first().append('3')).forTarget('tsx')
+    expect(arr.transform('const a = []', {})).toBe('const a = [3]')
+  })
+
+  it('without format, prepend and empty-fill stay byte-identical (verbatim contract)', async () => {
+    const prep = await defineCodemod((root) => root.find('array').first().prepend('0')).forTarget('tsx')
+    expect(prep.transform('const a = [1, 2]', {})).toBe('const a = [0, 1, 2]')
+    const fill = await defineCodemod((root) => root.find('object').first().append('a: 1')).forTarget('tsx')
+    expect(fill.transform('const a = {}', {})).toBe('const a = {a: 1}')
+  })
+
   it('collapses the line of an own-line element removed under format', async () => {
     const t = await defineCodemod({ format: true }, (root) => {
       root.find('array').first().children().at(1).remove({ separator: true })
@@ -171,13 +220,13 @@ describe('defineCodemod — format option', () => {
     expect(t.transform('cfg(\n  arg\n);', {})).toBe('cfg(\n);')
   })
 
-  it('leaves an inline element hole untouched (does not eat siblings) under format', async () => {
+  it('cleans the residual space of an inline element removed under format (does not eat siblings)', async () => {
     const t = await defineCodemod({ format: true }, (root) => {
       root.find('array').first().children().at(1).remove({ separator: true })
     }).forTarget('tsx')
-    // The span is deleted in place; the residual space is the downstream formatter's job — the point
-    // is that the inline sibling `3` survives (whole-line collapse must not fire here).
-    expect(t.transform('const a = [1, two(), 3];', {})).toBe('const a = [1,  3];')
+    // The element and its comma go, plus the one separating space, so no double space is left — and
+    // the inline sibling `3` survives (whole-line collapse must not fire here).
+    expect(t.transform('const a = [1, two(), 3];', {})).toBe('const a = [1, 3];')
   })
 
   it('without format, a removed own-line element leaves its line blank (verbatim contract)', async () => {
