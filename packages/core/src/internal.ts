@@ -6,6 +6,6 @@ export { Parser } from './parser.js'
 export { EXTENSION_GRAMMAR } from './extensions.js'
 export { wrapNode } from './rich-node.js'
 export { assert } from './assert.js'
-// Re-exported so a ZoneSplitter (e.g. @codegraft/vue) can walk the raw shell tree returned
-// by Parser.parse without taking its own web-tree-sitter dependency.
-export type { Node, Tree } from 'web-tree-sitter'
+// Re-exported (from the vendored engine, so a ZoneSplitter needs no web-tree-sitter dependency of
+// its own) to let it walk the raw shell tree Parser.parse returns.
+export type { Node, Tree } from '../vendor/web-tree-sitter/web-tree-sitter.js'
