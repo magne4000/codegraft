@@ -59,15 +59,27 @@ describe('Formatter — removal collapse', () => {
     expect(collector.toString()).toBe('c')
   })
 
-  it('removeNode collapses a preceding blank-line run with collapseBlankBefore', () => {
-    // `b` is the last element and a blank line precedes it; collapseBlankBefore takes that blank too,
-    // so nothing is left dangling. Without the flag the blank stays.
+  it('removeNode collapses a preceding blank-line run with collapse.before', () => {
+    // `b` is the last element and a blank line precedes it; collapse.before takes that blank too,
+    // so nothing is left dangling. With no flags the blank stays.
     const src = 'a\n\n  b\nc'
     const on = setup(src)
-    on.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1, true)
+    on.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1, { before: true })
     expect(on.collector.toString()).toBe('a\nc')
     const off = setup(src)
-    off.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1, false)
+    off.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1)
+    expect(off.collector.toString()).toBe('a\n\nc')
+  })
+
+  it('removeNode collapses a following blank-line run with collapse.after', () => {
+    // The mirror: `b` is the first element and a blank line follows it; collapse.after takes that
+    // blank too, so nothing dangles after the open. With no flags the blank stays.
+    const src = 'a\n  b\n\nc'
+    const on = setup(src)
+    on.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1, { after: true })
+    expect(on.collector.toString()).toBe('a\nc')
+    const off = setup(src)
+    off.f.removeNode(src.indexOf('b'), src.indexOf('b') + 1)
     expect(off.collector.toString()).toBe('a\n\nc')
   })
 

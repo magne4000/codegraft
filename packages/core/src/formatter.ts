@@ -1,6 +1,6 @@
 import type { RichNode } from './types.js'
 import type { EditCollector } from './edit-collector.js'
-import { type FormatStyle, reindent, indentOf, isHSpace, lineStartOf, wholeLineRange, blankRunStart } from './format.js'
+import { type FormatStyle, reindent, indentOf, isHSpace, lineStartOf, wholeLineRange, blankRunStart, blankRunEnd } from './format.js'
 import { openDelimiter, trailingSeparator, isMultiline, NEWLINE_CONTAINERS, SEMI_CONTAINERS } from './containers.js'
 
 /**
@@ -83,10 +83,11 @@ export class Formatter {
    *  while the leading-indent removal it overlaps is dropped on its own (first-wins) instead of taking
    *  the whole line removal down with it.
    *
-   *  With `collapseBlankBefore` (the node was the last surviving element of its container), the run
-   *  of blank lines directly above is removed too: it would otherwise be left dangling before the
-   *  container's closing delimiter, the way Prettier strips a blank line before a `}`. */
-  removeNode(start: number, end: number, collapseBlankBefore = false): void {
+   *  `collapse.before`/`collapse.after` (the node was the last / first surviving element of its
+   *  container) additionally drop the run of blank lines directly above / below: a blank separator
+   *  left against the container's closing / opening delimiter, which Prettier strips. Each is its own
+   *  edit, abutting (not overlapping) the line removal, so a prior edit on the line is unaffected. */
+  removeNode(start: number, end: number, collapse: { before?: boolean; after?: boolean } = {}): void {
     const lineStart = lineStartOf(this.#source, start)
     const newline = this.#source.indexOf('\n', end)
     const lineEnd = newline === -1 ? this.#source.length : newline
@@ -100,10 +101,11 @@ export class Formatter {
     }
     this.#collector.remove(start, end) // the content — abuts any prior edit at `start`, so it lands
     this.#collector.remove(lineStart, start) // leading indent — may be already gone under a prior edit
-    this.#collector.remove(end, newline === -1 ? this.#source.length : newline + 1) // trailing line break
-    // A preceding blank-line separator now sits against the container's close — collapse it. Its own
-    // edit (abutting the leading-indent removal, no overlap) so a prior edit on the line is unaffected.
-    if (collapseBlankBefore) this.#collector.remove(blankRunStart(this.#source, lineStart), lineStart)
+    const lineBreakEnd = newline === -1 ? this.#source.length : newline + 1
+    this.#collector.remove(end, lineBreakEnd) // trailing line break
+    if (collapse.before) this.#collector.remove(blankRunStart(this.#source, lineStart), lineStart)
+    // The trailing line break is gone, so the blank lines that followed start at `lineBreakEnd`.
+    if (collapse.after && newline !== -1) this.#collector.remove(lineBreakEnd, blankRunEnd(this.#source, lineBreakEnd))
   }
 
   /** Delete `[start, end)` where `end` begins a following node, collapsing the lines before it: when

@@ -285,9 +285,12 @@ export class Collection<G extends GrammarId = GrammarId> {
         if (comma) end = comma.documentEndIndex
       }
       // Collapse the line when the node owned it, the way Prettier would have. When the node is the
-      // last surviving element of its container, also collapse a blank line that preceded it, which
-      // would otherwise dangle before the closing delimiter.
-      this.#session.formatter.removeNode(node.documentStartIndex, end, isLastSurviving(node, removing))
+      // last / first surviving element of its container, also collapse a blank line that preceded /
+      // followed it, which would otherwise dangle before the closing / after the opening delimiter.
+      this.#session.formatter.removeNode(node.documentStartIndex, end, {
+        before: isLastSurviving(node, removing),
+        after: isFirstSurviving(node, removing),
+      })
     }
     return this
   }
@@ -562,6 +565,16 @@ function isLastSurviving(node: RichNode, removing: Set<RichNode>): boolean {
   const i = siblings?.indexOf(node) ?? -1
   if (i === -1) return false
   for (let j = i + 1; j < siblings!.length; j++) if (!removing.has(siblings![j])) return false
+  return true
+}
+
+/** The mirror of {@link isLastSurviving}: whether every preceding named sibling is also being
+ *  removed, so `node`'s following blank line would dangle after the container's open. */
+function isFirstSurviving(node: RichNode, removing: Set<RichNode>): boolean {
+  const siblings = node.parent?.children
+  const i = siblings?.indexOf(node) ?? -1
+  if (i === -1) return false
+  for (let j = 0; j < i; j++) if (!removing.has(siblings![j])) return false
   return true
 }
 

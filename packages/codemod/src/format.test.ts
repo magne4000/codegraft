@@ -221,6 +221,27 @@ describe('transform — formatting', () => {
     expect(out).toBe('const config = {\n  a: 1,\n};')
   })
 
+  it('collapses a blank line that followed a removed first element (no dangling blank after `{`)', async () => {
+    // The mirror of the last-element case: `a` is the first key and a blank line followed it, so
+    // removing it would leave that blank dangling after `{`. It collapses, as Prettier strips a blank
+    // line after an opening brace.
+    const out = await apply(
+      (root) => root.find('pair').filter((p) => p.field('key').text === 'a').remove({ separator: true }),
+      'const config = {\n  a: 1,\n\n  b: 2,\n};',
+    )
+    expect(out).toBe('const config = {\n  b: 2,\n};')
+  })
+
+  it('keeps a blank line that becomes an interior separator after removing a non-first element', async () => {
+    // `b` is a middle element with a blank after it; `a` survives before it, so the blank becomes an
+    // `a`/`c` separator (not a dangling blank after the open) and is preserved.
+    const out = await apply(
+      (root) => root.find('pair').filter((p) => p.field('key').text === 'b').remove({ separator: true }),
+      'const config = {\n  a: 1,\n  b: 2,\n\n  c: 3,\n};',
+    )
+    expect(out).toBe('const config = {\n  a: 1,\n\n  c: 3,\n};')
+  })
+
   it('cleans the residual space of an inline element removed under format (does not eat siblings)', async () => {
     // The element and its comma go, plus the one separating space, so no double space is left — and
     // the inline sibling `3` survives (whole-line collapse must not fire here).

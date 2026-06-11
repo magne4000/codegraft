@@ -126,6 +126,21 @@ export function blankRunStart(source: string, lineStart: number): number {
   return from
 }
 
+/** The end of the run of whole blank lines beginning at line start `from` — the start of the first
+ *  non-blank line at or after it (`from` itself when that line is non-blank, the source length when
+ *  only blank lines remain). The forward mirror of {@link blankRunStart}: collapsing the blank lines
+ *  that followed a removed first element, which would dangle after the container's opening delimiter. */
+export function blankRunEnd(source: string, from: number): number {
+  let to = from
+  while (to < source.length) {
+    const newline = source.indexOf('\n', to)
+    const lineEnd = newline === -1 ? source.length : newline
+    if (source.slice(to, lineEnd).trim() !== '') break // a non-blank line stops it
+    to = newline === -1 ? source.length : newline + 1
+  }
+  return to
+}
+
 /** The whole-line span `[from, to)` covering the lines `[start, end)` touches — from the start of
  *  `start`'s line (leading indentation included) through the newline after `end`'s line, so nothing
  *  blank is left behind. With `collapseBlankBefore`, also absorb whole blank lines immediately above
