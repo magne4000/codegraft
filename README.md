@@ -3,88 +3,99 @@
 > [!WARNING]
 > **Work in progress.** Codegraft is pre-1.0 and unstable — the API can change without notice and it isn't battle-tested. Pin exact versions and expect breaking changes.
 
-Structural, build-time code transformation built on [tree-sitter](https://tree-sitter.github.io/) (via `web-tree-sitter`/WASM). You author **codemods** — a jscodeshift-style collection API that finds, navigates, edits, and inserts over the syntax tree — and Codegraft applies them as precise text edits (with source maps). The motivating use case is collapsing scaffolding conditionals — e.g. [Bati](https://batijs.dev/)'s feature flags — but the engine is general.
+Codegraft rewrites source code with **codemods** — small programs that search a file's syntax tree and edit it. You write a codemod once, and Codegraft can apply it three ways: from your own code, inside your bundler (Vite, webpack, …), or as a one-shot CLI run over your file tree.
 
-```ts
-// in:  if ($$.BATI.has("auth")) { return <Dashboard /> } else { return <Landing /> }
-// out, given { BATI: { has: (f) => f === "auth" } }:  return <Dashboard />
-// out, given { BATI: { has: () => false } }:          return <Landing />
-```
+It is built on [tree-sitter](https://tree-sitter.github.io/) (via `web-tree-sitter`/WASM), so one API covers JavaScript, TypeScript, JSX/TSX, HTML, CSS, YAML, and `.vue` single-file components. Edits are applied as precise text patches with source maps — not a re-print of the whole file — so **code you don't touch keeps its exact formatting**.
 
-## Packages
+- [Why would I want this?](#why-would-i-want-this)
+- [Quick start](#quick-start)
+- [Writing codemods](#writing-codemods)
+- [Running codemods](#running-codemods)
+- [Ready-made rules](#ready-made-rules-codegraftrules)
+- [Packages](#packages)
+- [How it compares to other tools](#how-it-compares-to-other-tools)
+- [How it works](#how-it-works)
+- [Development](#development)
 
-| Package | Role |
-|---|---|
-| **`@codegraft/core`** | Runtime engine: parser, `RichNode`, comment attachment, zone splitting, the `Collection`, scope `Resolver`, edit application (magic-string), `createCodemodTransformer`, `evaluate`. |
-| **`@codegraft/codemod`** | Authoring: `defineCodemod` — a jscodeshift-style collection API (find / navigate / edit / insert / scope). |
-| **`@codegraft/rules`** | Ready-made codemods — ESLint-rule-style transforms (e.g. `removeUnusedImports`). One rule per module, tree-shakeable. |
-| **`@codegraft/cli`** | `codegraft run` — apply a codemod to a file tree (runs it live; one-shot, on-disk refactor). |
-| **`@codegraft/unplugin`** | Apply transforms inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm. |
-| **`@codegraft/vue`** | `vueSplitter` — split a `.vue` SFC into `<template>`/`<script>`/`<style>` zones. |
+## Why would I want this?
 
-Dependency graph: `@codegraft/core ← @codegraft/codemod ← {@codegraft/cli, @codegraft/rules}`, and `@codegraft/core ← {@codegraft/vue, @codegraft/unplugin}`.
+The motivating use case is **project scaffolding**. Tools like [Bati](https://batijs.dev/) generate projects from templates, and template code is full of feature-flag conditionals:
 
-## The `$$` namespace
-
-Conditions reference your build-time globals through a single namespace — `$$` by default, configurable. The **shape is yours**: type it once with a `declare global`, so source files type-check with no import, and the same name reads naturally inside directive comments.
-
-```ts
-// codegraft-env.d.ts
-declare global {
-  const $$: { BATI: { has(feature: string): boolean } }
+```tsx
+// template code
+if ($$.BATI.has("auth")) {
+  return <Dashboard />
+} else {
+  return <Landing />
 }
-export {}
 ```
 
-```ts
-// any source file — type-checked, collapsed at build:
-if ($$.BATI.has("auth")) doThis() else doThat()
+When a user generates a project *with* auth, a codemod collapses that whole block down to:
+
+```tsx
+return <Dashboard />
 ```
 
-Declaring the namespace (in `defineCodemod({ namespace: '$$' }, …)`) also enables a **scan-gate**: a file that never mentions `$$` is returned untouched without being parsed, so only files that opt in pay for a parse. Pick a name distinctive enough to rarely appear by accident.
+…and to `return <Landing />` without it. The generated project contains only the code for the features the user picked — no leftover flags, no dead branches.
 
-## Codemod API (`@codegraft/codemod`)
+But the engine is general. Anything that finds-and-edits syntax fits: registering a plugin into a `vite.config.ts`, removing unused imports, renaming an API across a codebase.
 
-The authoring surface: a jscodeshift-style collection over the CST that records magic-string edits, everything hanging off `root`/`ctx`.
+## Quick start
 
-- **Query** — `find` (a concrete type or a grammar supertype; field matchers can nest), `filter`, `closest`, `parent`, `children`, `siblings`/`nextSibling`/`prevSibling`, `ancestors`, `closestScope`, `first`/`at`, `isOfType`/`getTypes`.
-- **Edit** — `replaceWith` (a string or `(node) => string`), `setField`, `remove`, `unwrap`, `wrap`, `moveBefore`/`moveAfter`.
-- **Insert** — `insertBefore`/`insertAfter`, `append`/`prepend`, `ensureImport`; build the text with the grammar-validated `` code`…` ``.
-- **Scope** (JS/TS/TSX, confident-or-abstain) — `references`, `definition`, `lookup`, `bindingsInScope`.
-- **Comments** — `addLeadingComment`/`addTrailingComment`, `removeComments`, `mapLeadingComment`, plus the `directive`/`dropDirective` gates.
-
-Node-type and field-name strings are **typed against the installed grammars** — `find`/`closest`/`isOfType` take a `NodeType` (every node type, and supertype, across JS/TS/TSX/HTML/CSS/YAML), `field`/`setField` and object-form matchers take a `FieldName`, and `node.type` is a `NodeTypeAll` — so a typo is a compile error with autocomplete. These unions are generated from each grammar's `node-types.json` (`@codegraft/core`'s `regen-node-types`).
-
-`Collection` is generic over the grammar, defaulting to all of them. Annotate `root` to narrow to one grammar's vocabulary — the type is **carried through navigation**, and `forTarget` then only accepts a matching bare-grammar target:
-
-```ts
-defineCodemod((root: Collection<'tsx'>) => {
-  root.find('jsx_element').field('name')   // ✓ tsx, narrowed all the way down
-  root.find('type_identifier')             // ✓ tsx has the TS type grammar
-})
-defineCodemod((root: Collection<'javascript'>) => {
-  root.find('type_identifier')             // ✗ compile error — TS-only node type in a JS codemod
-})
+```bash
+npm install -D @codegraft/codemod @codegraft/cli
 ```
 
-A `ZoneSplitter` that introduces a grammar outside the built-in set casts (`find('astro_frontmatter' as NodeType)`) until its types are generated.
+A codemod is a function that receives the parsed file (`root`) and a context object (`ctx`, your build-time values), finds nodes, and edits them:
 
 ```ts
+// collapse-flags.ts
 import { defineCodemod } from '@codegraft/codemod'
 
-// Collapse build-time conditionals (the Bati case), nesting-safe:
-export default defineCodemod<Ctx>({ namespace: '$$' }, (root, ctx) => {
+export default defineCodemod({ namespace: '$$' }, (root, ctx) => {
   root.find('if_statement').forEach((node) => {
     const cond = node.field('condition')
-    if (!cond.text.includes('$$')) return
-    if (cond.evaluate(ctx)) node.unwrap(node.field('consequence').children())
-    else node.remove()
+    if (!cond.text.includes('$$')) return // not a build-time conditional — leave it alone
+    if (cond.evaluate(ctx)) {
+      // condition is true: keep the body, drop the if/else around it
+      node.unwrap(node.field('consequence').children())
+    } else {
+      // condition is false: keep the else body if there is one, otherwise delete
+      const alt = node.field('alternative')
+      if (alt.size() === 0) node.remove()
+      else node.unwrap(alt.find('statement_block').first().children())
+    }
   })
 })
-export const targets = ['tsx'] // the targets this codemod handles
+
+export const targets = ['tsx'] // the file types this codemod handles
 ```
 
-**Insertion** is the thing the template model can't do — e.g. register a Vite plugin idempotently:
+Run it over your source tree:
+
+```bash
+codegraft run "src/**/*.tsx" --codemod ./collapse-flags.ts --context '{"flags":{"auth":true}}' --in-place
+```
+
+Every `if ($$.flags.auth) { … }` in `src/` collapses to the winning branch. Use `--dry-run` to preview or `--out-dir` to write the results elsewhere.
+
+## Writing codemods
+
+The API (from `@codegraft/codemod`) is a collection over the syntax tree, modelled on [jscodeshift](https://github.com/facebook/jscodeshift): `find` nodes, navigate from them, edit them. Everything hangs off `root` and `ctx`.
+
+| Group | Methods |
+|---|---|
+| **Query** | `find` (by node type, with optional field matchers), `filter`, `closest`, `parent`, `children`, `siblings` / `nextSibling` / `prevSibling`, `ancestors`, `closestScope`, `first` / `at`, `isOfType` / `getTypes` |
+| **Edit** | `replaceWith` (a string or `(node) => string`), `setField`, `remove`, `unwrap`, `wrap`, `moveBefore` / `moveAfter` |
+| **Insert** | `insertBefore` / `insertAfter`, `append` / `prepend`, `ensureImport`, the grammar-validated `` code`…` `` template |
+| **Scope** | `references`, `definition`, `lookup`, `bindingsInScope` (JS/TS/TSX only) |
+| **Comments** | `addLeadingComment` / `addTrailingComment`, `removeComments`, `mapLeadingComment`, the `directive` / `dropDirective` gates |
+
+Node types and field names are tree-sitter's own (`call_expression`, field `function`) — there is no Babel-style alias layer.
+
+### Inserting code
+
+Insertion is the thing declarative pattern tools can't do. For example, registering a Vite plugin idempotently:
 
 ```ts
 export default defineCodemod((root) => {
@@ -98,7 +109,34 @@ export default defineCodemod((root) => {
 })
 ```
 
-**Scope** (`references`/`definition`, plus `lookup`/`bindingsInScope`) is **confident-or-abstain**: it returns `null` rather than guess when a tree contains a construct it doesn't fully model (`with`, `eval`, a TS namespace or ambient module, an object shorthand), so a rename never fires on a guess. JS/TS/TSX only; other languages return `null`. Vocabulary is **tree-sitter-native** — node types and field names are the grammar's own (`call_expression`, field `function`), no Babel alias layer.
+### Evaluating conditions
+
+`node.evaluate(ctx)` computes a `$$`-rooted expression against your context value — without `eval`. The namespace root resolves to `ctx`, so `$$.BATI.has("auth")` runs `ctx.BATI.has("auth")`, and `!`, `&&`, `||`, and comparisons compose as in JavaScript:
+
+```ts
+node.field('condition').evaluate(ctx) // $$.BATI.has("a") && !$$.BATI.has("b") → boolean
+```
+
+If a condition isn't pure over the context — it references a runtime variable, or uses an unsupported operator — evaluation throws and names the offending node rather than guessing.
+
+For conditions written in comments, `evaluateExpression(string, ctx)` evaluates captured text. Combined with the `directive` gate, this lets a comment control whether a declaration survives:
+
+```ts
+// source:
+//   // $$.BATI.has("auth")
+//   const session = createSession()
+
+root.find('lexical_declaration').forEach((decl) => {
+  const m = decl.directive(/\$\$[^\n]*/)
+  if (!m) return
+  decl.dropDirective(/\$\$/)
+  if (!decl.evaluateExpression(m[0], ctx)) decl.remove()
+})
+```
+
+### Scope: confident or abstain
+
+`references()` and `definition()` resolve identifiers through the scope tree, but they **never guess**: if the file contains a construct they can't fully model (`with`, `eval`, a TS namespace or ambient module, an object shorthand), they return `null` instead of a wrong answer. So a rename never fires on a guess:
 
 ```ts
 root.find('identifier', { text: 'oldName' }).forEach((id) => {
@@ -106,46 +144,132 @@ root.find('identifier', { text: 'oldName' }).forEach((id) => {
 })
 ```
 
-### Evaluating a condition
+Scope resolution covers JS/TS/TSX; other languages always return `null`.
 
-`node.evaluate(ctx)` (and `node.evaluateExpression(string, ctx)` for a directive comment's captured text) computes a `$$`-rooted expression against the context value, without `eval`: the identifier root resolves to `ctx`, so `$$.BATI.has("auth")` is `ctx.BATI.has("auth")`, and `!` / `&&` / `||` / comparisons compose as in JS. So a compound condition needs no codemod-specific logic:
+### Type-checked node names
+
+The node-type and field-name strings are typed against the installed grammars — a typo like `find('if_statment')` is a compile error, and you get autocomplete for every node type across JS/TS/TSX, HTML, CSS, and YAML. The unions are generated from each grammar's `node-types.json`.
+
+`Collection` is generic over the grammar and defaults to all of them. Annotate `root` to narrow to one grammar's vocabulary; the narrowing carries through navigation:
 
 ```ts
-node.field('condition').evaluate(ctx) // e.g. $$.BATI.has("a") && !$$.BATI.has("b") → boolean
+defineCodemod((root: Collection<'tsx'>) => {
+  root.find('jsx_element').field('name')   // ✓ tsx, narrowed all the way down
+  root.find('type_identifier')             // ✓ tsx includes the TS type grammar
+})
+defineCodemod((root: Collection<'javascript'>) => {
+  root.find('type_identifier')             // ✗ compile error — TS-only node type in a JS codemod
+})
 ```
 
-A condition that isn't pure over the context (a runtime variable, an unsupported operator) asserts and names the offending node, rather than evaluating wrong.
+(A `ZoneSplitter` that introduces a grammar outside the built-in set casts — `find('astro_frontmatter' as NodeType)` — until its types are generated.)
+
+### The `$$` namespace
+
+Build-time conditions reference your values through a single namespace — `$$` by default, configurable via `defineCodemod({ namespace: … })`. Two things make this pleasant:
+
+**Your shape, typed once.** Declare the namespace globally and every source file type-checks with no import:
+
+```ts
+// codegraft-env.d.ts
+declare global {
+  const $$: { BATI: { has(feature: string): boolean } }
+}
+export {}
+```
+
+```ts
+// any source file — type-checks today, collapses at build time:
+if ($$.BATI.has("auth")) doThis() else doThat()
+```
+
+**Free skip for untouched files.** Declaring the namespace also enables a scan-gate: a file that never mentions `$$` is returned untouched without even being parsed. Pick a name distinctive enough to rarely appear by accident.
+
+## Running codemods
+
+The same codemod runs in three settings. In every one of them the codemod's actual function runs live, so it can use module-scope helpers, imports, and npm dependencies — there is no compile/serialize step.
+
+**Programmatic** — the context is your namespace value, functions and all:
+
+```ts
+import codemod from './collapse-flags'
+
+const transform = await codemod.forTarget('tsx')
+transform.transform(source, { BATI: { has: (f) => enabled.has(f) } })
+```
+
+**Inside a bundler** (`@codegraft/unplugin`) — transforms run as part of the build:
+
+```ts
+// vite.config.ts
+import codegraft from '@codegraft/unplugin/vite'
+import { vueSplitter } from '@codegraft/vue'
+import codemod from './collapse-flags'
+
+export default {
+  plugins: [codegraft({ codemod, context: { BATI: { has: (f) => enabled.has(f) } }, splitters: [vueSplitter] })],
+}
+```
+
+`/rollup`, `/rolldown`, `/esbuild`, `/webpack`, `/rspack`, and `/farm` entries also exist.
+
+**CLI** — a one-shot, on-disk refactor (the jscodeshift use case):
+
+```bash
+codegraft run "src/**/*.tsx" --codemod ./collapse-flags.ts --context '{"flags":{"auth":true}}' --in-place
+```
+
+One caveat: `--context` is JSON, so the CLI suits a *data-shaped* namespace (`$$.flags.auth`, comparisons). A method-valued namespace like `$$.BATI.has(...)` can't be expressed as JSON — use the programmatic API or the bundler plugin for those.
 
 ## Ready-made rules (`@codegraft/rules`)
 
-ESLint-rule-style transforms, authored with `defineCodemod` and shipped as a tree-shakeable library — one rule per module behind a named export, so importing one drops the rest. The first is `removeUnusedImports` (the analogue of `eslint-plugin-unused-imports` plus the import half of `@typescript-eslint/consistent-type-imports`): it removes imports with no reference, rewrites a value import used only in a type position into a type import (`import { Foo }` + `let v: Foo` → `import type { Foo }`), and removes unused `import type` too. It's **confident-or-abstain** — leaning on the scope resolver, it never removes a side-effect import (`import 'x'`) and abstains on a whole file it can't model (`with` / `eval` / a TS namespace / ambient module).
+ESLint-rule-style transforms, authored with `defineCodemod` and shipped tree-shakeable — one rule per module, so importing one drops the rest.
 
-A rule is grammar-agnostic — the same definition runs against any JS-family grammar and, through a `ZoneSplitter`, only the `<script>` of an SFC. You pick the targets when you apply it:
+The first rule is **`removeUnusedImports`** (the analogue of `eslint-plugin-unused-imports` plus the import half of `@typescript-eslint/consistent-type-imports`). It:
+
+- removes imports that nothing references;
+- rewrites a value import used only in type positions into a type import (`import { Foo }` + `let v: Foo` → `import type { Foo }`);
+- removes unused `import type` too.
+
+Like the scope resolver it leans on, it is confident-or-abstain: it never removes a side-effect import (`import 'x'`), and it skips a whole file it can't model (`with` / `eval` / a TS namespace / ambient module) rather than risk a wrong removal.
+
+A rule is grammar-agnostic — the same definition runs against any JS-family grammar, and on the `<script>` of a `.vue` file through a splitter:
 
 ```ts
 import { removeUnusedImports } from '@codegraft/rules'
 import { vueSplitter } from '@codegraft/vue'
 
-// programmatic / dev mode — one target at a time
-const transform = await removeUnusedImports.forTarget('tsx')      // JS / JSX / TS / TSX
+// programmatic — one target at a time
+const transform = await removeUnusedImports.forTarget('tsx')
 transform.transform(source, {})
 
 // Vue SFC — prunes the <script>, but keeps imports used only from the template
-// (a `<Tag>`, a `v-directive`, or an interpolation/binding expression)
+// (a <Tag>, a v-directive, or an interpolation/binding expression)
 const vue = await removeUnusedImports.forTarget(vueSplitter)
 ```
 
-Each rule is also a ready codemod module (default export + JS-family `targets`), so the CLI applies it directly over your source — no wrapper, and `.vue` `<script>` is handled by the cli's built-in splitter:
+Each rule is also a ready codemod module, so the CLI applies it directly — `.vue` `<script>` included, via the CLI's built-in splitter:
 
 ```bash
 codegraft run "src/**/*.{ts,tsx,vue}" --codemod @codegraft/rules/remove-unused-imports --in-place
 ```
 
-In a bundler, hand it to `@codegraft/unplugin` like any codemod (`{ codemod: removeUnusedImports, context: {}, splitters: [vueSplitter] }`).
+In a bundler, hand it to `@codegraft/unplugin` like any other codemod.
 
-## Compared to other tools
+## Packages
 
-Codegraft's collection shape — `find` → navigate → edit — is modelled on [jscodeshift](https://github.com/facebook/jscodeshift), so that API reads familiarly. Across the wider landscape the engines differ on a few axes:
+| Package | What it's for |
+|---|---|
+| **`@codegraft/codemod`** | Authoring codemods: `defineCodemod` and the collection API. **Start here.** |
+| **`@codegraft/cli`** | `codegraft run` — apply a codemod over a file tree, one-shot. |
+| **`@codegraft/unplugin`** | Apply codemods inside a bundler — Vite / Rollup / Rolldown / esbuild / webpack / Rspack / Farm. |
+| **`@codegraft/rules`** | Ready-made codemods, e.g. `removeUnusedImports`. |
+| **`@codegraft/vue`** | `vueSplitter` — splits a `.vue` SFC into `<template>` / `<script>` / `<style>` zones. |
+| **`@codegraft/core`** | The engine underneath: parser, comment attachment, zone splitting, scope resolver, edit application. You rarely import it directly. |
+
+## How it compares to other tools
+
+Codegraft's `find` → navigate → edit shape is modelled on jscodeshift, so the API reads familiarly. The engines differ on a few axes:
 
 | Tool | Foundation | Languages | Authoring | Output | Type-aware |
 |---|---|---|---|---|---|
@@ -157,65 +281,24 @@ Codegraft's collection shape — `find` → navigate → edit — is modelled on
 
 Picking between them:
 
-- **Type-aware or cross-file refactors** (semantic rename, follow a symbol through the program) → **ts-morph**, which runs the real TypeScript checker. Codegraft is purely syntactic and single-file; its `references()`/`definition()` **abstain** (return `null`) on anything they can't resolve from the CST alone, so a rename never fires on a guess.
-- **JS-family transforms with an existing corpus to reuse** → **jscodeshift** / **Babel**. Their *typed* builders construct nodes that are valid by construction; Codegraft builds with the `` code`…` `` template, which validates the snippet against the grammar (it just isn't a typed node API).
-- **Fast declarative search-lint-rewrite by pattern** → **ast-grep** (or GritQL) — close in spirit to Codegraft's removed `expr` rules; Codegraft chose an imperative collection instead, for insertion and navigation that patterns can't express.
-- **Codegraft's niche**: real grammars across the JS family *and* HTML/CSS/Vue in one API, byte-exact edits with source maps (recast/Babel reprint the subtree they touch), comment-directive–gated edits, and applying the transform **inside a bundler** (`@codegraft/unplugin`) as well as one-shot over your source (`codegraft run`).
-
-## Using it
-
-**Programmatic** — the context is your namespace value, functions and all:
-
-```ts
-import codemod from './bati-codemod'
-const transform = await codemod.forTarget('tsx')
-transform.transform(source, { BATI: { has: (f) => enabled.has(f) } })
-```
-
-**Bundler** (`@codegraft/unplugin`):
-
-```ts
-// vite.config.ts
-import codegraft from '@codegraft/unplugin/vite'
-import { vueSplitter } from '@codegraft/vue'
-import codemod from './bati-codemod'
-
-export default {
-  plugins: [codegraft({ codemod, context: { BATI: { has: (f) => enabled.has(f) } }, splitters: [vueSplitter] })],
-}
-```
-
-(`/rollup`, `/rolldown`, `/esbuild`, `/webpack`, `/rspack`, `/farm` entries also exist.)
-
-**CLI** — a one-shot, on-disk refactor (the jscodeshift use case). The codemod runs live, so it just imports its file:
-
-```bash
-codegraft run "src/**/*.tsx" --codemod bati-codemod.ts --context '{"flags":{"auth":true}}' --in-place
-```
-
-`--context` is JSON, so the CLI suits a **data-shaped** namespace (`$$.flags.auth`, comparisons). A method-valued namespace like `$$.BATI.has(...)` can't be expressed as JSON — supply it through the programmatic API or unplugin instead.
+- **Need type information or cross-file refactors** (semantic rename, follow a symbol through the program)? Use **ts-morph** — it runs the real TypeScript checker. Codegraft is purely syntactic and single-file; its scope queries abstain rather than guess.
+- **JS-only transforms, with an existing corpus to reuse**? **jscodeshift** or **Babel**. Their typed builders construct nodes that are valid by construction; Codegraft builds with the `` code`…` `` template, which validates snippets against the grammar but isn't a typed node API.
+- **Fast declarative search-and-replace by pattern**? **ast-grep**. Codegraft chose an imperative collection instead, for insertion and navigation that patterns can't express.
+- **Codegraft's niche**: real grammars across the JS family *and* HTML/CSS/Vue in one API, byte-exact edits with source maps, comment-directive–gated edits, and running the same codemod inside a bundler as well as one-shot over your source.
 
 ## How it works
 
-`splitAndParse` turns a target into parsed zones (a single grammar → one zone; a `ZoneSplitter` → one per SFC section). Comments are attached to nodes, then your codemod runs against a `Collection` over every zone's tree, recording edits. Edits go through `magic-string` (so source maps stay precise); a narrow-delete like `unwrap` keeps the retained range editable, so nested conditionals collapse in one pass. Every recorded edit is rendered layout-aware (below).
+`splitAndParse` turns a target into parsed zones — a plain file is one zone; a `ZoneSplitter` makes one per SFC section. Comments are attached to nodes, then your codemod runs against a `Collection` over each zone's tree, recording edits. Edits are applied through `magic-string`, which keeps source maps precise. A narrow-delete like `unwrap` keeps the retained range editable, so nested conditionals collapse in a single pass.
 
-Every consumer — `forTarget`, `codegraft run`, and `@codegraft/unplugin` — runs the codemod's **live** function (via `createCodemodTransformer`), so a codemod is free to use module-scope helpers, imports, and npm deps. There is no compile/serialise step.
+### Formatting: syntactic validity, nothing more
 
-### Formatting
+Untouched code keeps its exact bytes — there is no reprint step to disturb it. For the text an edit *does* produce, a small formatter renders just enough for the result to parse, and leaves cosmetics to whatever formatter you already run (Prettier, Biome, …):
 
-Because Codegraft edits byte ranges rather than reprinting, **code you don't touch keeps its exact formatting for free** — there's no reprint step to disturb it (recast's headline feature, but unconditional here). For the text it *does* touch, a small `Formatter` renders each edit only as far as **syntactic validity**, leaving cosmetics to whatever formatter you already run (Prettier, Biome, …):
+- an inserted snippet is re-indented to its anchor line, preserving its own internal indentation, with line breaks normalized to the source's EOL;
+- `append` / `prepend` give the new element its container's separator (a `,` / `;` / line break) so it parses;
+- `remove` is a plain delete; `{ separator: true }` also drops the element's delimiter — no `[1, , 3]` hole, no blank line where a statement sat.
 
-- an inserted snippet (`replaceWith`/`insertBefore`/`insertAfter`/`addLeadingComment`/`ensureImport`) is re-indented to its anchor line — preserving the snippet's own internal indentation, line breaks normalised to the source's detected EOL;
-- `append`/`prepend` give the new element its container's separator (a `,` / `;` / line break) so it parses;
-- `remove` is a plain delete; `{ separator: true }` also drops the element's delimiter — a list comma (no `[1, , 3]` hole / invalid member) or a statement's trailing line (no blank left where it sat).
-
-```ts
-// replacing  gen()  in:   function f() {␊  gen()␊}
-root.find('call_expression', { function: 'gen' }).replaceWith('function g() {␊  return 1␊}')
-// →  function f() {␊  function g() {␊    return 1␊  }␊}     (the snippet adopts the call's indent)
-```
-
-Beyond that it does **no** cosmetic layout — an appended element isn't reflowed onto its own line, a removed node's blank line isn't collapsed. That's deliberate: Codegraft isn't a formatter, and pairing it with one (which generated projects run anyway) keeps the engine small and free of style opinions that would only fight your Prettier/Biome config.
+Beyond that it does **no** cosmetic layout — an appended element isn't reflowed onto its own line, for instance. That's deliberate: Codegraft isn't a formatter, and staying out of layout keeps the engine small and free of style opinions that would fight your Prettier/Biome config.
 
 ## Development
 
@@ -227,4 +310,4 @@ pnpm test      # vitest
 
 Requires Node ≥ 22.13 and pnpm 11.
 
-The node-type/field unions in `@codegraft/core/src/generated/node-types.ts` are checked in and regenerated with `pnpm --filter @codegraft/core regen-node-types` (CI fails if a regen is owed). It reads javascript/html/css from their npm packages, typescript/tsx from the vendored `node-types.json` that `regen-ts-wasm` writes (it builds only the tsx wasm — the runtime grammar for the whole JS/TS/TSX family — but vendors both node-types so the per-grammar typings stay distinct), and yaml from the vendored copy alongside the `tree-sitter-yaml` wasm (from `@tree-sitter-grammars/tree-sitter-yaml`).
+The node-type/field unions in `@codegraft/core/src/generated/node-types.ts` are checked in; regenerate with `pnpm --filter @codegraft/core regen-node-types` (CI fails if a regen is owed). It reads javascript/html/css types from their npm packages, typescript/tsx from the vendored `node-types.json` that `regen-ts-wasm` writes (it builds only the tsx wasm — the runtime grammar for the whole JS/TS/TSX family — but vendors both node-types so the per-grammar typings stay distinct), and yaml from the vendored copy alongside the `tree-sitter-yaml` wasm.
